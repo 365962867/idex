@@ -82,7 +82,10 @@ final class iDexUITests: XCTestCase {
             attachScreenshot("record-cover-\(language)", app: app)
             XCTAssertGreaterThanOrEqual(number.frame.minY - app.frame.minY, 100)
             XCTAssertTrue(app.frame.contains(close.frame))
-            XCTAssertGreaterThan(close.frame.midX, app.frame.maxX - 60)
+            XCTAssertGreaterThan(close.frame.minY, app.frame.minY + app.frame.height * 0.8)
+            XCTAssertGreaterThanOrEqual(close.frame.height, 44)
+            XCTAssertFalse(close.frame.intersects(app.buttons["catalog-button"].frame))
+            XCTAssertFalse(close.frame.intersects(app.buttons["read-button"].frame))
             close.tap()
             XCTAssertTrue(app.buttons["settings-button"].waitForExistence(timeout: 5))
         }

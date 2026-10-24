@@ -2,10 +2,11 @@ import SwiftUI
 
 struct EntryPanel: View {
     @Bindable var store: DexStore
+    var onClose: (() -> Void)? = nil
     @State private var showStats = false
 
     var body: some View {
-        VStack(spacing: 17) {
+        VStack(spacing: onClose == nil ? 17 : 15) {
             HStack(spacing: 12) {
                 Screw()
                 Text(store.text("POKÉMON RESEARCH", "宝可梦研究终端"))
@@ -111,7 +112,17 @@ struct EntryPanel: View {
                     Spacer()
                     Text(store.confidence.map { "\(Int($0 * 100))%" } ?? store.text("GEN. I", "第一世代"))
                         .font(DexTheme.pixel(7)).foregroundStyle(.white.opacity(0.5))
-                    SpeakerGrille().scaleEffect(0.8).frame(width: 50)
+                    if let onClose {
+                        Button(action: onClose) {
+                            Text(store.text("CLOSE", "关闭"))
+                                .font(PixelFont.font(size: store.language == .en ? 8 : 14, language: store.language))
+                        }
+                        .buttonStyle(HardwareButtonStyle())
+                        .accessibilityLabel(store.text("Close record", "关闭记录"))
+                        .accessibilityIdentifier("close-record")
+                    } else {
+                        SpeakerGrille().scaleEffect(0.8).frame(width: 50)
+                    }
                 }
             }
             Spacer(minLength: 0)

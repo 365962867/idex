@@ -53,13 +53,13 @@ struct CompactRecordView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .topTrailing) {
+            ZStack {
                 ShellSurface()
-                EntryPanel(store: store)
+                EntryPanel(store: store, onClose: {
+                    store.audio.play(.button)
+                    store.showingCompactEntry = false
+                })
                     .frame(width: proxy.size.width, height: proxy.size.height)
-                Button { store.showingCompactEntry = false } label: {
-                    Image(systemName: "xmark.circle.fill").font(.title2).padding(20)
-                }.tint(DexTheme.cream).accessibilityLabel(store.text("Close record", "关闭记录")).accessibilityIdentifier("close-record")
             }
             .clipped()
         }

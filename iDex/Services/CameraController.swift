@@ -105,7 +105,13 @@ final class CameraController {
 /// Retain just one sensor frame. Rendering happens only on a scan, away from the
 /// UI actor; there is no still-photo shutter, autofocus, or encoding delay.
 nonisolated private final class CameraSessionWorker: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
-    let session = AVCaptureSession()
+    let session: AVCaptureSession = {
+        let session = AVCaptureSession()
+        // This session captures video only. Audio playback owns the shared
+        // session; camera startup must not change its category or routing.
+        session.automaticallyConfiguresApplicationAudioSession = false
+        return session
+    }()
     private let queue = DispatchQueue(label: "app.idex.camera", qos: .userInitiated)
     private let frameQueue = DispatchQueue(label: "app.idex.camera.frames", qos: .userInitiated)
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -144,9 +150,17 @@ nonisolated private final class CameraSessionWorker: NSObject, AVCaptureVideoDat
         }
         session.addInput(input)
         videoOutput.alwaysDiscardsLateVideoFrames = true
-        videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
         videoOutput.setSampleBufferDelegate(self, queue: frameQueue)
         session.addOutput(videoOutput)
+        // Retain native YUV frames; Core Image converts only the tapped frame.
+        // BGRA requires AVFoundation to convert every frame in the live feed.
+        let availableFormats = videoOutput.availableVideoPixelFormatTypes
+        let preferredFormats = [kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+                                kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                                kCVPixelFormatType_32BGRA]
+        if let format = preferredFormats.first(where: availableFormats.contains) {
+            videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: format]
+        }
         // Keep sensor pixels unrotated; apply the tap-time capture angle once.
         if let connection = videoOutput.connection(with: .video), connection.isVideoRotationAngleSupported(0) {
             connection.videoRotationAngle = 0

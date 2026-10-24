@@ -1,3 +1,4 @@
+import AVFoundation
 import CoreImage
 import CoreVideo
 import ImageIO
@@ -5,6 +6,11 @@ import Testing
 @testable import iDex
 
 struct CameraCaptureTests {
+    @MainActor @Test func viewfinderLeavesAudioConfigurationToPlayback() {
+        let camera = CameraController()
+        #expect(!camera.session.automaticallyConfiguresApplicationAudioSession)
+    }
+
     @Test func scanRetainsTheTapTimeFrameWhenNewFramesArrive() throws {
         let frames = CameraFrameBuffer()
         #expect(throws: CameraError.self) { try frames.snapshot() }
@@ -38,6 +44,31 @@ struct CameraCaptureTests {
         #expect(captured.width == 60)
         #expect(captured.height == 60)
         #expect(captured.dataProvider?.data as Data? == expected.dataProvider?.data as Data?)
+    }
+
+    @Test(arguments: [kCVPixelFormatType_420YpCbCr8BiPlanarFullRange, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange])
+    func nativeYUVFramesRenderAsUprightRGB(format: OSType) throws {
+        var buffer: CVPixelBuffer?
+        #expect(CVPixelBufferCreate(kCFAllocatorDefault, 64, 48, format,
+                                   [kCVPixelBufferIOSurfacePropertiesKey: [:]] as CFDictionary, &buffer) == kCVReturnSuccess)
+        let pixels = try #require(buffer)
+        CVPixelBufferLockBaseAddress(pixels, [])
+        for plane in 0..<CVPixelBufferGetPlaneCount(pixels) {
+            let base = try #require(CVPixelBufferGetBaseAddressOfPlane(pixels, plane))
+            memset(base, 128, CVPixelBufferGetBytesPerRowOfPlane(pixels, plane) * CVPixelBufferGetHeightOfPlane(pixels, plane))
+        }
+        CVPixelBufferUnlockBaseAddress(pixels, [])
+        let context = CIContext(options: [.useSoftwareRenderer: true])
+        let captured = try #require(CameraFrameRenderer.squareImage(CIImage(cvPixelBuffer: pixels), rotation: 90, context: context))
+        #expect(captured.width == 48)
+        #expect(captured.height == 48)
+        let rgb = try #require(CGContext(data: nil, width: 48, height: 48, bitsPerComponent: 8, bytesPerRow: 48 * 4,
+                                        space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        rgb.draw(captured, in: CGRect(x: 0, y: 0, width: 48, height: 48))
+        let bytes = try #require(rgb.data).assumingMemoryBound(to: UInt8.self)
+        #expect((120...140).contains(bytes[0]))
+        #expect(abs(Int(bytes[0]) - Int(bytes[1])) <= 2)
+        #expect(abs(Int(bytes[1]) - Int(bytes[2])) <= 2)
     }
 
     private func makeBuffer() throws -> CVPixelBuffer {

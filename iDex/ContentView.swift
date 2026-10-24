@@ -249,11 +249,13 @@ private struct ScannerPanel: View {
 
     private var targetGrid: some View {
         Canvas { context, size in
+            var dots = Path()
             for x in stride(from: 0.0, to: size.width, by: 20) {
                 for y in stride(from: 0.0, to: size.height, by: 20) {
-                    context.fill(Path(CGRect(x: x, y: y, width: 1, height: 1)), with: .color(DexTheme.ink.opacity(0.18)))
+                    dots.addRect(CGRect(x: x, y: y, width: 1, height: 1))
                 }
             }
+            context.fill(dots, with: .color(DexTheme.ink.opacity(0.18)))
             for inset in [40.0, 75.0] {
                 context.stroke(Path(ellipseIn: CGRect(x: inset, y: inset, width: size.width - inset * 2, height: size.height - inset * 2)), with: .color(DexTheme.ink.opacity(0.08)), lineWidth: 1)
             }

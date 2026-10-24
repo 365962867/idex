@@ -7,12 +7,13 @@ struct CatalogSheet: View {
 
     var body: some View {
         NavigationStack {
+            let matches = results
             VStack(spacing: 0) {
                 Toggle(store.text("Discovered only", "仅显示已发现"), isOn: $seenOnly)
                     .font(.system(size: 13, design: .monospaced)).padding(.horizontal, 20).padding(.vertical, 10)
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 125), spacing: 12)], spacing: 12) {
-                        ForEach(results) { pokemon in
+                        ForEach(matches) { pokemon in
                             Button {
                                 store.browse(pokemon)
                             } label: {
@@ -31,7 +32,7 @@ struct CatalogSheet: View {
                             }.buttonStyle(.plain).accessibilityIdentifier("pokemon-\(pokemon.id)")
                         }
                     }.padding(20)
-                    if results.isEmpty {
+                    if matches.isEmpty {
                         ContentUnavailableView.search(text: query)
                     }
                 }

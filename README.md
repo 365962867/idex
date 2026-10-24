@@ -6,7 +6,7 @@ A native, bilingual pocket Pokédex for iPhone Duo. Built with SwiftUI, AVFounda
 
 Open `iDex.xcodeproj` in Xcode 27.1, select the **iDex** scheme and **iPhone Duo** simulator, then Run. There are no packages, API keys, server, or runtime downloads to configure. The app target supports iOS 27 and newer; hinge observation uses iOS 27.1 when available.
 
-On a physical iPhone, iDex requests camera access and starts the viewfinder. Tap **Scan** to retain the latest camera frame immediately, then run recognition on that frozen image. A sweeping beam and looping scan chime accompany inference, with at least one 1.1-second sweep before the result appears. The camera stops after capture. The viewfinder reveals the matched Pokémon's pixel sprite, name, and model score. Tap **Rescan** to clear the result and restore live framing, then **Scan** to capture the next target. Camera and Photo Library controls also switch sources; importing a photo immediately runs the same scan sequence. Photos remain in memory. The sweep respects Reduce Motion and the chime respects the sound setting.
+On a physical iPhone, iDex requests camera access and starts the viewfinder. Tap **Scan** to retain the latest camera frame immediately, then run recognition on that frozen image. A sweeping beam and looping scan chime accompany inference; the result appears as soon as recognition finishes. The camera stops after capture. The viewfinder reveals the matched Pokémon's pixel sprite, name, and model score. Tap **Rescan** to clear the result and restore live framing, then **Scan** to capture the next target. Camera and Photo Library controls also switch sources; importing a photo immediately runs the same scan sequence. Photos remain in memory. The sweep respects Reduce Motion and the chime respects the sound setting.
 
 In Simulator, iDex starts with an explicitly labelled Pikachu sample because there is no rear camera. **Scan** runs that sprite through the actual bundled Core ML model; **Rescan** restores the labelled sample so the full flow can be repeated.
 
@@ -16,7 +16,7 @@ Unfolding reveals the archive on the left. The viewfinder uses a fixed 466-point
 
 Scan results stay in the viewfinder on both displays, keeping **Rescan** accessible. **Open record** shows the entry in a dismissible full-screen record while closed and gives access to the archive. Opening the device dismisses that compact record so the inside becomes visible. Search in either language by name, dex number, or localized type. Browse records with the arrow buttons, switch field notes to base stats, and use Read/Stop for narration.
 
-Settings offers English / 简体中文 and a sound toggle. Names, types, notes, controls, camera privacy text, pixel fonts, and speech use the selected language. The first launch follows the system language. Language, sound, last-viewed species, and discovered species IDs persist locally. Photos remain in memory and are never uploaded or written to an app photo archive. System speech uses installed voices; a desired voice may need to be installed in iOS Settings for offline speech.
+Settings offers English / 简体中文 and a sound toggle. Names, types, notes, controls, camera privacy text, pixel fonts, and speech use the selected language. The first launch follows the system language. Language, sound, last-viewed species, and discovered species IDs persist locally. Photos remain in memory, are released when their scan result appears, and are never uploaded or written to an app photo archive. System speech uses installed voices; a desired voice may need to be installed in iOS Settings for offline speech.
 
 ## Recognition scope
 
@@ -25,6 +25,10 @@ The app includes a roughly **14 MB FP16 DenseNet121 Core ML model for the origin
 This is a 151-class model without a trained unknown/background class. Unrelated objects and non-Kanto Pokémon can still produce false matches. Camera accuracy across toys, cards, lighting, and viewpoints needs physical-device evaluation. The model score is not a calibrated probability. See [model provenance and reproduction](iDex/Recognition/MODEL.md).
 
 The app target uses Swift `-O` optimization with whole-module compilation and C/Objective-C optimization level 2 in both Debug and Release. Optimized builds can make debugger stepping and local-variable inspection less precise. Xcode’s SwiftUI previews require temporarily selecting `-Onone` and `singlefile` compilation.
+
+Photo preparation runs outside the main actor and requests a thumbnail of approximately four megapixels or less before making the centered, upright 1200px square. Camera capture prefers native YUV frames, converting only the retained scan frame to RGB. Static texture drawing batches dots and lines, while catalog searches reuse prepared numbers and bilingual types. See [performance measurements and reproduction](docs/performance.md).
+
+Audio session configuration, player preparation, waveform generation, and speech setup run on a dedicated serial queue. Chime players and voices are reused, and stopping a scan does not initialize an unused speech service. Audio never holds up capture or the completed result. Mute, backgrounding, and newer requests cancel pending playback even while native audio setup is in progress.
 
 ## Tests and visual checks
 

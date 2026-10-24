@@ -65,6 +65,22 @@ struct CatalogTests {
         #expect(catalog.pokemon(id: 152) == nil)
     }
 
+    @Test func searchFindsEverySpeciesByEitherNameOrNumberInDexOrder() {
+        let catalog = PokemonCatalog.shared
+        for language in AppLanguage.allCases {
+            for pokemon in catalog.entries {
+                for query in [pokemon.englishName, pokemon.chineseName, pokemon.number] {
+                    let ids = catalog.search(query, language: language).map(\.id)
+                    #expect(ids.contains(pokemon.id))
+                    #expect(ids == ids.sorted())
+                }
+            }
+            #expect(catalog.search("saur", language: language).map(\.id) == [1, 2, 3])
+            #expect(catalog.search("Nidoran", language: language).map(\.id) == [29, 32])
+            #expect(catalog.search("25", language: language).map(\.id) == [25, 125])
+        }
+    }
+
     @Test func systemCameraPromptHasBothTranslations() throws {
         for (locale, expectedWord) in [("en", "camera"), ("zh-Hans", "相机")] {
             let path = try #require(Bundle.main.path(forResource: locale, ofType: "lproj"))

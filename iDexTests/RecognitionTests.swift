@@ -20,7 +20,6 @@ struct RecognitionTests {
             UserDefaults.standard.set(savedViewed, forKey: "idex.lastViewed")
             UserDefaults.standard.set(savedSeen, forKey: "idex.seen")
         }
-        let started = ContinuousClock.now
         let task = Task { await store.scan() }
         for _ in 0..<100 {
             if store.capturedImage != nil { break }
@@ -31,7 +30,6 @@ struct RecognitionTests {
         #expect(store.confidence == nil)
         await task.value
 
-        #expect(started.duration(to: .now) >= .milliseconds(1100))
         #expect(!store.isScanning)
         #expect(store.scannedPokemon?.id == 25)
         #expect(store.identified)
@@ -91,6 +89,29 @@ struct RecognitionTests {
         #expect(store.scannedPokemon?.id == 25)
         #expect(store.scanResult?.candidates.first?.confidence == 0.1)
         #expect(store.scanResult?.accepted == nil)
+    }
+
+    @Test func completedScansReleaseThePhotoAndKeepTheCameraStoppedOnResume() throws {
+        let soundWasEnabled = DeviceAudio.shared.isSoundEnabled
+        let savedViewed = UserDefaults.standard.object(forKey: "idex.lastViewed")
+        DeviceAudio.shared.isSoundEnabled = false
+        let store = DexStore()
+        defer {
+            store.suspend()
+            DeviceAudio.shared.isSoundEnabled = soundWasEnabled
+            UserDefaults.standard.set(savedViewed, forKey: "idex.lastViewed")
+        }
+        store.useSample = false
+        store.capturedImage = UIImage(named: "pokemon-025")
+        let match = RecognitionCandidate(dexID: 25, name: "pikachu", confidence: 0.1, logit: 1)
+        try store.applyRecognition(RecognitionResult(candidates: [match], accepted: nil, logitMargin: 0))
+
+        #expect(store.capturedImage == nil)
+        #expect(store.scannedPokemon?.id == 25)
+        store.suspend()
+        store.resume()
+        #expect(store.camera.status == .idle)
+        #expect(store.scannedPokemon?.id == 25)
     }
 
     @Test("Core ML identifies opaque sprites including previously rejected matches", arguments: [25, 6, 65, 83, 86, 98, 129])

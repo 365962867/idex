@@ -1,8 +1,8 @@
-import AVFoundation
+import Foundation
 import Observation
 import UIKit
 
-enum DeviceSound: Equatable {
+nonisolated enum DeviceSound: Hashable, Sendable, CaseIterable {
     case button, scan, success, error, open
 }
 
@@ -15,15 +15,17 @@ final class DeviceAudio {
 
     var isSoundEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(isSoundEnabled, forKey: "idex.soundEnabled")
-            if !isSoundEnabled {
-                stopAll()
-            }
+            defaults.set(isSoundEnabled, forKey: "idex.soundEnabled")
+            if isSoundEnabled { prepareWhenActive() }
+            else { stopAll() }
         }
     }
 
-    @ObservationIgnored private let synthesizer = AVSpeechSynthesizer()
-    @ObservationIgnored private var soundPlayer: AVAudioPlayer?
+    @ObservationIgnored private let worker: any DeviceAudioPlayback
+    @ObservationIgnored private let defaults: UserDefaults
+    @ObservationIgnored private var isActive = false
+    @ObservationIgnored private var soundRequest: AudioPlaybackRequest?
+    @ObservationIgnored private var speechRequest: AudioPlaybackRequest?
     @ObservationIgnored private var sessionConfigured = false
     @ObservationIgnored private var activationTask: Task<Bool, Never>?
     @ObservationIgnored private var deactivationTask: Task<Void, Never>?
@@ -33,13 +35,37 @@ final class DeviceAudio {
     @ObservationIgnored private var speechGeneration = 0
     @ObservationIgnored private var currentSound: DeviceSound?
 
-    private init() {
-        let defaults = UserDefaults.standard
+    init(worker: any DeviceAudioPlayback = AudioPlaybackWorker(), defaults: UserDefaults = .standard) {
+        self.worker = worker
+        self.defaults = defaults
         isSoundEnabled = defaults.object(forKey: "idex.soundEnabled") != nil
             ? defaults.bool(forKey: "idex.soundEnabled") : true
     }
 
-    var isSpeaking: Bool { synthesizer.isSpeaking }
+    func resume() {
+        isActive = true
+        prepareWhenActive()
+    }
+
+    @discardableResult
+    func suspend() -> Task<Void, Never>? {
+        isActive = false
+        stopAll()
+        return deactivationTask
+    }
+
+    /// Warm the session and chime players before the first interaction. Capture
+    /// and inference never wait on this; pending playback joins the same task.
+    func prepare() async -> Bool {
+        guard isActive, isSoundEnabled else { return false }
+        let ready = await ensureSession()
+        return ready && isActive && isSoundEnabled
+    }
+
+    private func prepareWhenActive() {
+        guard isActive, isSoundEnabled else { return }
+        Task { [weak self] in _ = await self?.prepare() }
+    }
 
     func play(_ cue: DeviceSound) {
         // Hinge and navigation feedback must not interrupt the active scan loop.
@@ -51,48 +77,36 @@ final class DeviceAudio {
         case .open: UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.6)
         case .button: UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.6)
         }
-        guard isSoundEnabled else { return }
+        guard isActive, isSoundEnabled else { return }
         currentSound = cue
         soundGeneration += 1
         let generation = soundGeneration
         soundTask?.cancel()
-        soundPlayer?.stop()
+        soundRequest?.cancel()
+        let request = AudioPlaybackRequest()
+        soundRequest = request
+        worker.stopSound()
         soundTask = Task { [weak self] in
             guard let self, !Task.isCancelled else { return }
             guard await self.ensureSession(),
                   !Task.isCancelled, self.isSoundEnabled,
-                  generation == self.soundGeneration,
-                  UIApplication.shared.applicationState != .background else { return }
-            do {
-                let player = try AVAudioPlayer(data: Self.wave(for: cue))
-                player.volume = 0.32
-                player.numberOfLoops = cue == .scan ? -1 : 0
-                player.prepareToPlay()
-                self.soundPlayer = player
-                player.play()
-            } catch {
-                // Unavailable audio must not prevent scanning or haptics.
-            }
+                  generation == self.soundGeneration, self.isActive else { return }
+            self.worker.play(cue, request: request)
         }
     }
 
     func speak(_ text: String, languageCode: String) {
-        guard isSoundEnabled, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard isActive, isSoundEnabled, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         stopSpeaking()
         let generation = speechGeneration
+        let request = AudioPlaybackRequest()
+        speechRequest = request
         speechTask = Task { [weak self] in
             guard let self, !Task.isCancelled else { return }
             guard await self.ensureSession(),
                   !Task.isCancelled, self.isSoundEnabled,
-                  generation == self.speechGeneration,
-                  UIApplication.shared.applicationState != .background else { return }
-            let utterance = AVSpeechUtterance(string: text)
-            utterance.voice = AVSpeechSynthesisVoice(language: languageCode)
-            utterance.rate = languageCode.hasPrefix("zh") ? 0.43 : 0.46
-            utterance.pitchMultiplier = 0.84
-            utterance.volume = 0.9
-            utterance.preUtteranceDelay = 0.28
-            self.synthesizer.speak(utterance)
+                  generation == self.speechGeneration, self.isActive else { return }
+            self.worker.speak(text, languageCode: languageCode, request: request)
         }
     }
 
@@ -100,7 +114,9 @@ final class DeviceAudio {
         speechGeneration += 1
         speechTask?.cancel()
         speechTask = nil
-        synthesizer.stopSpeaking(at: .immediate)
+        speechRequest?.cancel()
+        speechRequest = nil
+        worker.stopSpeaking()
     }
 
     func stopAll() {
@@ -118,8 +134,9 @@ final class DeviceAudio {
         soundGeneration += 1
         soundTask?.cancel()
         soundTask = nil
-        soundPlayer?.stop()
-        soundPlayer = nil
+        soundRequest?.cancel()
+        soundRequest = nil
+        worker.stopSound()
         currentSound = nil
     }
 
@@ -131,18 +148,7 @@ final class DeviceAudio {
         if let activation = activationTask { return await activation.value }
         let activation = Task { @MainActor [weak self] () -> Bool in
             guard let self else { return false }
-            let session = AVAudioSession.sharedInstance()
-            do {
-                try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
-            } catch {
-                self.activationTask = nil
-                return false
-            }
-            let active = await withCheckedContinuation { continuation in
-                session.activate(options: []) { activated, error in
-                    continuation.resume(returning: activated && error == nil)
-                }
-            }
+            let active = await self.worker.activate()
             self.sessionConfigured = active
             self.activationTask = nil
             return active
@@ -160,17 +166,17 @@ final class DeviceAudio {
             // Cancelled play/speech requests cannot emit a delayed sound.
             if let activation = pendingActivation { _ = await activation.value }
             guard let self else { return }
-            await withCheckedContinuation { continuation in
-                AVAudioSession.sharedInstance().deactivate(options: [.notifyOthersOnDeactivation]) { _, _ in
-                    continuation.resume()
-                }
-            }
+            await self.worker.deactivate()
             self.sessionConfigured = false
             self.deactivationTask = nil
         }
     }
+}
 
-    nonisolated private static func wave(for cue: DeviceSound) -> Data {
+nonisolated enum DeviceSoundWave {
+    static let sampleRate = 22_050.0
+
+    static func samples(for cue: DeviceSound) -> [Float] {
         let notes: [(frequency: Double, duration: Double)]
         switch cue {
         case .button: notes = [(1_046.5, 0.045), (1_568, 0.045)]
@@ -179,8 +185,7 @@ final class DeviceAudio {
         case .error: notes = [(329.63, 0.10), (246.94, 0.15)]
         case .open: notes = [(392, 0.05), (523.25, 0.05), (659.25, 0.10)]
         }
-        let sampleRate = 22_050
-        var samples = [Int16]()
+        var samples = [Float]()
         for note in notes {
             let count = Int(note.duration * Double(sampleRate))
             for index in 0..<count {
@@ -191,29 +196,9 @@ final class DeviceAudio {
                 let attack = min(1, Double(index) / 100)
                 let release = min(1, Double(count - index) / 200)
                 let value = (square * 0.6 + triangle * 0.4) * attack * release
-                samples.append(Int16(value * 16_000))
+                samples.append(Float(Int16(value * 16_000)) / 32_768)
             }
         }
-        let byteCount = UInt32(samples.count * MemoryLayout<Int16>.size)
-        var data = Data()
-        func appendString(_ string: String) { data.append(contentsOf: string.utf8) }
-        func appendInteger<T: FixedWidthInteger>(_ integer: T) {
-            var value = integer.littleEndian
-            withUnsafeBytes(of: &value) { data.append(contentsOf: $0) }
-        }
-        appendString("RIFF")
-        appendInteger(UInt32(36) + byteCount)
-        appendString("WAVEfmt ")
-        appendInteger(UInt32(16))
-        appendInteger(UInt16(1)) // Linear PCM.
-        appendInteger(UInt16(1)) // Mono.
-        appendInteger(UInt32(sampleRate))
-        appendInteger(UInt32(sampleRate * 2))
-        appendInteger(UInt16(2))
-        appendInteger(UInt16(16))
-        appendString("data")
-        appendInteger(byteCount)
-        samples.withUnsafeBytes { data.append(contentsOf: $0) }
-        return data
+        return samples
     }
 }

@@ -14,12 +14,17 @@ struct ShellSurface: View {
         ZStack {
             LinearGradient(colors: [Color(red: 0.91, green: 0.21, blue: 0.24), DexTheme.red, Color(red: 0.55, green: 0.035, blue: 0.065)], startPoint: .topLeading, endPoint: .bottomTrailing)
             Canvas { context, size in
+                var brightDots = Path()
+                var faintDots = Path()
                 for x in stride(from: 0.0, to: size.width, by: 4) {
                     for y in stride(from: 0.0, to: size.height, by: 4) {
-                        let alpha = (Int(x * 7 + y * 13) % 9 == 0) ? 0.10 : 0.025
-                        context.fill(Path(CGRect(x: x, y: y, width: 1, height: 1)), with: .color(.white.opacity(alpha)))
+                        let rect = CGRect(x: x, y: y, width: 1, height: 1)
+                        if Int(x * 7 + y * 13) % 9 == 0 { brightDots.addRect(rect) }
+                        else { faintDots.addRect(rect) }
                     }
                 }
+                context.fill(brightDots, with: .color(.white.opacity(0.10)))
+                context.fill(faintDots, with: .color(.white.opacity(0.025)))
             }.allowsHitTesting(false)
             // Resolve each corner independently against the active display. The
             // cover's 8pt leading corners become square at these insets, while
@@ -96,9 +101,11 @@ struct LCDPanel<Content: View>: View {
 struct ScanLines: View {
     var body: some View {
         Canvas { context, size in
+            var lines = Path()
             for y in stride(from: 0.0, to: size.height, by: 3) {
-                context.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 0.5)), with: .color(.black.opacity(0.075)))
+                lines.addRect(CGRect(x: 0, y: y, width: size.width, height: 0.5))
             }
+            context.fill(lines, with: .color(.black.opacity(0.075)))
         }
     }
 }

@@ -83,6 +83,8 @@ actor PokemonClassifier {
 
     private func loadIfNecessary() throws {
         guard model == nil else { return }
+        let interval = DexPerformance.begin("Model Load")
+        defer { DexPerformance.end("Model Load", interval) }
         guard let url = Bundle.main.url(forResource: "KantoClassifier", withExtension: "mlmodelc") else {
             throw RecognitionError.missingModel
         }

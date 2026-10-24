@@ -76,12 +76,16 @@ struct Pokemon: Identifiable, Codable, Hashable {
 
     static func typeName(_ type: String, in language: AppLanguage) -> String {
         guard language == .zhHans else { return type.uppercased() }
-        return ["normal": "一般", "fighting": "格斗", "flying": "飞行", "poison": "毒",
-                "ground": "地面", "rock": "岩石", "bug": "虫", "ghost": "幽灵",
-                "steel": "钢", "fire": "火", "water": "水", "grass": "草",
-                "electric": "电", "psychic": "超能力", "ice": "冰", "dragon": "龙",
-                "dark": "恶", "fairy": "妖精"][type] ?? type
+        return chineseTypeNames[type] ?? type
     }
+
+    private static let chineseTypeNames = [
+        "normal": "一般", "fighting": "格斗", "flying": "飞行", "poison": "毒",
+        "ground": "地面", "rock": "岩石", "bug": "虫", "ghost": "幽灵",
+        "steel": "钢", "fire": "火", "water": "水", "grass": "草",
+        "electric": "电", "psychic": "超能力", "ice": "冰", "dragon": "龙",
+        "dark": "恶", "fairy": "妖精"
+    ]
 
     func spokenEntry(in language: AppLanguage) -> String {
         if language == .zhHans {
@@ -94,6 +98,15 @@ struct Pokemon: Identifiable, Codable, Hashable {
 struct PokemonCatalog {
     static let shared = PokemonCatalog()
     let entries: [Pokemon]
+    private let entriesByID: [Int: Pokemon]
+    private let searchIndex: [SearchEntry]
+
+    private struct SearchEntry {
+        let pokemon: Pokemon
+        let number: String
+        let englishTypes: [String]
+        let chineseTypes: [String]
+    }
 
     private init(bundle: Bundle = .main) {
         guard let url = bundle.url(forResource: "pokemon-kanto", withExtension: "json"),
@@ -101,24 +114,32 @@ struct PokemonCatalog {
               let decoded = try? JSONDecoder().decode([Pokemon].self, from: data) else {
             assertionFailure("The bundled Kanto catalog is missing or invalid.")
             entries = []
+            entriesByID = [:]
+            searchIndex = []
             return
         }
         entries = decoded.sorted { $0.id < $1.id }
+        entriesByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
+        searchIndex = entries.map {
+            SearchEntry(pokemon: $0, number: $0.number,
+                        englishTypes: $0.typeNames(in: .en), chineseTypes: $0.typeNames(in: .zhHans))
+        }
     }
 
     func pokemon(id: Int) -> Pokemon? {
-        entries.first { $0.id == id }
+        entriesByID[id]
     }
 
     func search(_ query: String, language: AppLanguage) -> [Pokemon] {
         let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty else { return entries }
         let numberQuery = value.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
-        return entries.filter {
-            $0.englishName.localizedCaseInsensitiveContains(value)
-                || $0.chineseName.contains(value)
-                || $0.number.contains(numberQuery)
-                || $0.typeNames(in: language).contains { $0.localizedCaseInsensitiveContains(value) }
+        return searchIndex.compactMap { entry in
+            let matches = entry.pokemon.englishName.localizedCaseInsensitiveContains(value)
+                || entry.pokemon.chineseName.contains(value)
+                || entry.number.contains(numberQuery)
+                || (language == .en ? entry.englishTypes : entry.chineseTypes).contains { $0.localizedCaseInsensitiveContains(value) }
+            return matches ? entry.pokemon : nil
         }
     }
 }

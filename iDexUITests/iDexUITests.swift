@@ -10,7 +10,7 @@ final class iDexUITests: XCTestCase {
         let app = launchInEnglish()
         XCTAssertTrue(element("viewfinder", in: app).waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["SAMPLE TARGET"].exists)
-        app.buttons["sample-button"].tap()
+        XCTAssertFalse(app.buttons["sample-button"].exists)
         let identify = app.buttons["identify-button"]
         XCTAssertTrue(identify.isEnabled)
         attachScreenshot("scanner-sample-en", app: app)

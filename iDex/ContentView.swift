@@ -92,8 +92,6 @@ private struct ScannerPanel: View {
                     PhotosPicker(selection: $photo, matching: .images) {
                         Image(systemName: "photo.on.rectangle.angled").frame(width: 28)
                     }.accessibilityLabel(store.text("Import photo", "导入照片"))
-                    Button { store.chooseSample() } label: { Image(systemName: "sparkles").frame(width: 28) }
-                        .accessibilityLabel(store.text("Try sample", "体验样本")).accessibilityIdentifier("sample-button")
                     Spacer(minLength: 0)
                     Button {
                         if !store.useSample && store.capturedImage != nil { store.chooseCamera() }
@@ -226,7 +224,7 @@ private struct ScannerPanel: View {
                     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                 }.font(.system(size: 13, weight: .bold)).tint(DexTheme.ink)
             } else {
-                Text(store.text("Import a photo or try a sample", "导入照片或体验样本"))
+                Text(store.text("Import a photo", "导入照片"))
                     .font(.system(size: 12, design: .monospaced))
             }
         }.foregroundStyle(DexTheme.ink).multilineTextAlignment(.center).padding(25)

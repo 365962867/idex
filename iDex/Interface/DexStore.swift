@@ -50,19 +50,6 @@ final class DexStore {
         return text("ARCHIVE", "档案")
     }
 
-    func chooseSample() {
-        DeviceAudio.shared.stopSpeaking()
-        cancelScan()
-        camera.stop()
-        useSample = true
-        capturedImage = nil
-        confidence = nil
-        message = nil
-        candidates = []
-        identified = false
-        DeviceAudio.shared.play(.button)
-    }
-
     func chooseCamera() {
         DeviceAudio.shared.stopSpeaking()
         cancelScan()

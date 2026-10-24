@@ -7,7 +7,7 @@ import UIKit
 @Suite("Bundled offline Pokémon recognition", .serialized)
 @MainActor
 struct RecognitionTests {
-    @Test("Core ML identifies opaque bundled sprites", arguments: [25, 6])
+    @Test("Core ML identifies opaque sprites including previously rejected matches", arguments: [25, 6, 65, 83, 86, 98, 129])
     func identifiesKnownPokemon(dexID: Int) async throws {
         let sprite = try #require(UIImage(named: String(format: "pokemon-%03d", dexID)))
         let image = try #require(renderOpaque(sprite: sprite))
@@ -19,12 +19,11 @@ struct RecognitionTests {
         #expect(accepted.dexID == dexID)
         #expect(result.candidates.first?.dexID == dexID)
         #expect(result.candidates.count == 3)
-        #expect(accepted.confidence >= 0.60)
-        #expect(accepted.logit >= 3)
-        #expect(result.logitMargin >= 2)
+        #expect(accepted.confidence >= 0.25)
+        #expect(result.logitMargin >= 0.5)
     }
 
-    @Test("Core ML abstains on blank images", arguments: [false, true])
+    @Test("Blank images still offer a best match without confirming a discovery", arguments: [false, true])
     func rejectsBlankImages(black: Bool) async throws {
         let image = try #require(renderOpaque(sprite: nil, background: black ? .black : .white))
         let result = try await PokemonClassifier().classify(image: image)
@@ -33,6 +32,29 @@ struct RecognitionTests {
         #expect(result.candidates.count == 3)
         #expect(result.candidates.allSatisfy { (1...151).contains($0.dexID) })
         #expect(result.candidates.allSatisfy { $0.confidence.isFinite && (0...1).contains($0.confidence) })
+
+        let soundWasEnabled = DeviceAudio.shared.isSoundEnabled
+        let savedLanguage = UserDefaults.standard.object(forKey: "idex.language")
+        let savedViewed = UserDefaults.standard.object(forKey: "idex.lastViewed")
+        DeviceAudio.shared.isSoundEnabled = false
+        defer {
+            DeviceAudio.shared.isSoundEnabled = soundWasEnabled
+            UserDefaults.standard.set(savedLanguage, forKey: "idex.language")
+            UserDefaults.standard.set(savedViewed, forKey: "idex.lastViewed")
+        }
+        let store = DexStore()
+        let originalSeen = store.seenIDs
+        // A blank frame must replace the previous record with its top prediction.
+        store.selected = PokemonCatalog.shared.pokemon(id: result.candidates[0].dexID == 25 ? 6 : 25)
+        try store.applyRecognition(result)
+        #expect(store.selected?.id == result.candidates.first?.dexID)
+        #expect(store.confidence == result.candidates.first?.confidence)
+        #expect(!store.identified)
+        #expect(store.seenIDs == originalSeen)
+        store.language = .en
+        #expect(store.entryStatusTitle == "BEST MATCH")
+        store.language = .zhHans
+        #expect(store.entryStatusTitle == "最可能匹配")
     }
 
     @Test("Model labels map exactly to the bundled Kanto catalog")

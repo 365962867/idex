@@ -44,6 +44,11 @@ final class DexStore {
 
     func text(_ en: String, _ zh: String) -> String { language.text(en, zh) }
     var sample: Pokemon? { PokemonCatalog.shared.pokemon(id: sampleID) }
+    var entryStatusTitle: String {
+        if identified { return text("IDENTIFIED", "已识别") }
+        if confidence != nil { return text("BEST MATCH", "最可能匹配") }
+        return text("ARCHIVE", "档案")
+    }
 
     func chooseSample() {
         DeviceAudio.shared.stopSpeaking()
@@ -133,16 +138,24 @@ final class DexStore {
     private func recognize(_ image: CGImage, operation: UUID) async throws {
         let result = try await classifier.classify(image: image)
         guard operation == operationID, isActive else { return }
-        candidates = result.candidates
-        guard let match = result.accepted, let pokemon = PokemonCatalog.shared.pokemon(id: match.dexID) else {
-            confidence = nil
-            message = text("No clear match. Try a closer, well-lit Pokémon image.", "尚未找到可靠匹配，请靠近并保持光线充足。")
-            DeviceAudio.shared.play(.error)
-            return
+        try applyRecognition(result)
+    }
+
+    func applyRecognition(_ result: RecognitionResult) throws {
+        guard let match = result.candidates.first,
+              let pokemon = PokemonCatalog.shared.pokemon(id: match.dexID) else {
+            throw RecognitionError.invalidOutput
         }
+        candidates = result.candidates
         selected = pokemon
         confidence = match.confidence
-        identified = true
+        identified = result.accepted != nil
+        guard identified else {
+            message = text("Best match; low confidence.", "最可能的匹配，置信度较低。")
+            DeviceAudio.shared.play(.button)
+            return
+        }
+        message = nil
         seenIDs.insert(pokemon.id)
         UserDefaults.standard.set(seenIDs.sorted(), forKey: "idex.seen")
         DeviceAudio.shared.play(.success)

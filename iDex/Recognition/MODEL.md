@@ -18,13 +18,14 @@ The upstream author describes training on artwork, real-world cards, toys and fi
 
 ## Acceptance and uncertainty
 
-The Swift actor computes ordinary softmax scores. Unlike the upstream example, it does **not** apply temperature `0.25`, which would inflate displayed confidence. A result is accepted only when all three heuristics pass:
+The Swift actor computes ordinary softmax scores. Unlike the upstream example, it does **not** apply temperature `0.25`, which would inflate displayed confidence. Every successful inference offers its highest-ranked candidate, regardless of score. A result is also accepted for automatic discovery and narration when both relaxed heuristics pass:
 
-1. Top softmax score ≥ 0.60.
-2. Top raw logit ≥ 3.0.
-3. Difference between the two highest logits ≥ 2.0.
+1. Top softmax score ≥ 0.25.
+2. Difference between the two highest logits ≥ 0.5.
 
-Otherwise, `accepted` is nil and the top three candidates remain available for a retake or an explicit user choice. The model has no trained background/unknown class: these thresholds reduce weak matches but cannot guarantee rejection of unrelated objects, non-Kanto species, or unfamiliar artwork. Scores are model confidence, not calibrated real-world probabilities. Never automatically save or narrate an uncertain match as a confirmed discovery.
+There is no raw-logit minimum.
+
+Otherwise, `accepted` is nil, but the app still selects and opens the first candidate’s record as “Best match”, showing its score. The top three candidates remain available. The model has no trained background/unknown class: these thresholds limit automatic discovery and narration of weak matches but cannot guarantee rejection of unrelated objects, non-Kanto species, or unfamiliar artwork. Scores are model confidence, not calibrated real-world probabilities. Never automatically save or narrate an uncertain match as a confirmed discovery.
 
 ## Reproduction and checks
 
@@ -39,7 +40,7 @@ xcrun coremlc compile iDex/Recognition/KantoClassifier.mlpackage /tmp/idex-model
 
 The source checkpoint is downloaded into `/tmp/idex-model-source`, outside the app and repository. `convert_model.py` regenerates the Core ML package and labels, then optionally compares Core ML with PyTorch on two upstream examples and three synthetic negatives. Recorded outputs are in `scripts/model/verification.json`.
 
-Verified locally on macOS Core ML:
+Historical checks on macOS Core ML (acceptance counts below used the previous 60% / logit 3.0 / margin 2.0 policy; recorded JSON files retain that historical evidence):
 
 - Upstream Pikachu image: correct #25, accepted (ordinary softmax ≈ 88.4% after white alpha composition).
 - Upstream Charizard image: correct #6, accepted (≈ 87.8%).
@@ -57,10 +58,11 @@ These are smoke checks, not a broad benchmark or proof of camera accuracy. A phy
 ```swift
 let classifier = PokemonClassifier()
 let result = try await classifier.classify(image: cgImage)
-if let match = result.accepted {
-    // match.dexID, match.name, match.confidence
-} else {
-    // Ask for a clearer image; result.candidates contains three possibilities.
+if let bestMatch = result.candidates.first {
+    // Always show bestMatch.dexID, bestMatch.name and bestMatch.confidence.
+}
+if let accepted = result.accepted {
+    // Only accepted results automatically update discoveries and trigger narration.
 }
 ```
 

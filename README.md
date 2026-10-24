@@ -18,9 +18,11 @@ Settings offers English / 简体中文 and a sound toggle. Names, types, notes, 
 
 ## Recognition scope
 
-The app includes a roughly **14 MB FP16 DenseNet121 Core ML model for the original 151 Kanto species**. It computes predictions on the device and abstains when score and separation heuristics are weak. Only accepted results are marked discovered or automatically narrated. Uncertain results show possible candidates and ask for a clearer image.
+The app includes a roughly **14 MB FP16 DenseNet121 Core ML model for the original 151 Kanto species**. It computes predictions on the device and always selects the highest-ranked Pokémon. A top score of at least 25% and a logit margin of at least 0.5 allow automatic discovery and narration. Weaker results still open the top Pokémon’s record, labelled “Best match”, with its actual model score; they are not automatically marked discovered or narrated.
 
 This is a 151-class model without a trained unknown/background class. Unrelated objects and non-Kanto Pokémon can still produce false matches. Camera accuracy across toys, cards, lighting, and viewpoints needs physical-device evaluation. The model score is not a calibrated probability. See [model provenance and reproduction](iDex/Recognition/MODEL.md).
+
+The app target uses Swift `-O` optimization with whole-module compilation and C/Objective-C optimization level 2 in both Debug and Release. Optimized builds can make debugger stepping and local-variable inspection less precise. Xcode’s SwiftUI previews require temporarily selecting `-Onone` and `singlefile` compilation.
 
 ## Tests and visual checks
 
@@ -31,7 +33,7 @@ xcodebuild test -project iDex.xcodeproj -scheme iDex \
   -destination 'platform=iOS Simulator,name=iPhone Duo'
 ```
 
-The tests exercise real bundled-model inference and blank-image abstention, catalog completeness, every sprite, both fonts, Chinese and English search and prompts, layout continuity, language persistence, discovery display, and archive selection. The UI tests explicitly mute audio to keep automated runs quiet.
+The tests exercise real bundled-model inference, relaxed acceptance of previously rejected sprites, and blank-image best guesses without automatic discovery, catalog completeness, every sprite, both fonts, Chinese and English search and prompts, layout continuity, language persistence, discovery display, and archive selection. The UI tests explicitly mute audio to keep automated runs quiet.
 
 `ContentView.swift` contains named SwiftUI previews at the Duo cover and expanded dimensions. The physical camera and an actual fold transition still require device testing; rendered expanded previews and geometry tests do not prove physical continuity.
 

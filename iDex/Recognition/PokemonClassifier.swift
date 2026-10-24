@@ -75,8 +75,9 @@ actor PokemonClassifier {
         }
         let margin = logits[indices[0]] - logits[indices[1]]
         let first = candidates[0]
-        // Abstain on weak evidence. These are heuristics, not an unknown-object detector.
-        let accepted = first.confidence >= 0.60 && first.logit >= 3 && margin >= 2 ? first : nil
+        // Always offer the top candidate. Acceptance only controls automatic discovery
+        // and narration; these relaxed heuristics are not an unknown-object detector.
+        let accepted = first.confidence >= 0.25 && margin >= 0.5 ? first : nil
         return RecognitionResult(candidates: candidates, accepted: accepted, logitMargin: margin)
     }
 

@@ -103,7 +103,7 @@ def main():
             probabilities /= probabilities.sum()
             margin = float(actual[indices[0]] - actual[indices[1]])
             confidence = float(probabilities[indices[0]])
-            accepted = confidence >= 0.60 and margin >= 2.0 and float(actual[indices[0]]) >= 3.0
+            accepted = confidence >= 0.25 and margin >= 0.5
             record = {"input": name, "expectedID": expected, "topID": labels[indices[0]]["id"],
                       "confidence": confidence, "logitMargin": margin, "accepted": accepted,
                       "maximumAbsoluteConversionError": float(np.max(np.abs(reference - actual))),
@@ -128,7 +128,7 @@ def main():
             probabilities /= probabilities.sum()
             confidence = float(probabilities[indices[0]])
             margin = float(logits[indices[0]] - logits[indices[1]])
-            accepted = confidence >= 0.60 and margin >= 2.0 and float(logits[indices[0]]) >= 3.0
+            accepted = confidence >= 0.25 and margin >= 0.5
             records.append({"expectedID": identifier, "topID": labels[indices[0]]["id"], "confidence": confidence,
                             "logitMargin": margin, "accepted": accepted})
         summary = {"input": "Bundled Black/White 96px sprites, white alpha composite, nearest-neighbor resize to224",

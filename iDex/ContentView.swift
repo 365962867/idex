@@ -34,8 +34,8 @@ struct ContentView: View {
                     store.showingCatalog = false
                 }
             }
-            .onChange(of: store.identified) { _, value in
-                if value && !geometry.isOpen { store.showingCompactEntry = true }
+            .onChange(of: store.confidence) { _, value in
+                if value != nil && !geometry.isOpen { store.showingCompactEntry = true }
             }
         }
         .ignoresSafeArea()

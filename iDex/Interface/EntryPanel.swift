@@ -21,7 +21,7 @@ struct EntryPanel: View {
                         HStack {
                             Text("No. \(pokemon.number)").font(DexTheme.pixel(10)).accessibilityIdentifier("entry-number")
                             Spacer()
-                            Text(store.identified ? store.text("IDENTIFIED", "已识别") : store.text("ARCHIVE", "档案"))
+                            Text(store.entryStatusTitle)
                                 .font(PixelFont.font(size: store.language == .en ? 7 : 13, language: store.language))
                         }
                         Rectangle().fill(DexTheme.ink.opacity(0.25)).frame(height: 1)

@@ -9,6 +9,7 @@ import SwiftUI
 
 @main
 struct iDexApp: App {
+    @UIApplicationDelegateAdaptor(DexAppDelegate.self) private var appDelegate
     var body: some Scene {
         WindowGroup {
             ContentView()

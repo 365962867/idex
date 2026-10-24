@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+"""Rebuild the offline Kanto catalog from cached upstream CSVs and sprites."""
+import concurrent.futures
+import csv
+import io
+import json
+from pathlib import Path
+import time
+import urllib.request
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[2]
+CACHE = ROOT / '.catalog-cache'
+RESOURCES = ROOT / 'iDex' / 'Resources'
+CSV_BASE = 'https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv/'
+FILES = ['pokemon.csv', 'pokemon_species_names.csv', 'pokemon_species_flavor_text.csv', 'pokemon_types.csv', 'types.csv', 'pokemon_stats.csv', 'stats.csv']
+
+def download(url, path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        return path.read_bytes()
+    for attempt in range(4):
+        try:
+            request = urllib.request.Request(url, headers={'User-Agent': 'iDex-development-catalog/1.0'})
+            data = urllib.request.urlopen(request, timeout=40).read()
+            path.write_bytes(data)
+            return data
+        except Exception:
+            if attempt == 3:
+                raise
+            time.sleep(1 + attempt)
+
+def rows(file):
+    return list(csv.DictReader(io.StringIO(download(CSV_BASE + file, CACHE / file).decode('utf-8'))))
+
+def main():
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        csvs = dict(zip(FILES, pool.map(rows, FILES)))
+    species_names = {(int(r['pokemon_species_id']), int(r['local_language_id'])): r for r in csvs['pokemon_species_names.csv']}
+    type_names = {r['id']: r['identifier'] for r in csvs['types.csv']}
+    stat_names = {r['id']: r['identifier'] for r in csvs['stats.csv']}
+    flavor = {}
+    # Retain the latest available text in each language (CSV is ordered by version id).
+    for r in csvs['pokemon_species_flavor_text.csv']:
+        if int(r['species_id']) <= 151 and r['language_id'] in ('9', '12'):
+            normalized = ' '.join(r['flavor_text'].replace('\f', ' ').split())
+            flavor[(int(r['species_id']), int(r['language_id']))] = normalized.replace(' ', '') if r['language_id'] == '12' else normalized
+    entries = []
+    slug_by_id = {}
+    for p in csvs['pokemon.csv']:
+        number = int(p['id'])
+        if not 1 <= number <= 151:
+            continue
+        en = species_names[(number, 9)]
+        zh = species_names[(number, 12)]
+        slug_by_id[number] = p['identifier']
+        entry = {
+            'id': number,
+            'englishName': en['name'],
+            'chineseName': zh['name'],
+            'types': [type_names[t['type_id']] for t in csvs['pokemon_types.csv'] if int(t['pokemon_id']) == number],
+            'height': int(p['height']) / 10,
+            'weight': int(p['weight']) / 10,
+            'englishDescription': flavor[(number, 9)],
+            'chineseDescription': flavor[(number, 12)],
+            'englishGenus': en['genus'],
+            'chineseGenus': zh['genus'],
+            'stats': [{'name': stat_names[s['stat_id']], 'value': int(s['base_stat'])} for s in csvs['pokemon_stats.csv'] if int(s['pokemon_id']) == number]
+        }
+        entries.append(entry)
+    assert len(entries) == 151
+    assert all(p['chineseDescription'] and len(p['stats']) == 6 for p in entries)
+    RESOURCES.mkdir(parents=True, exist_ok=True)
+    (RESOURCES / 'pokemon-kanto.json').write_text(json.dumps(entries, ensure_ascii=False, indent=2) + '\n')
+    assets = RESOURCES / 'PokemonSprites.xcassets'
+    assets.mkdir(exist_ok=True)
+    (assets / 'Contents.json').write_text(json.dumps({'info': {'author': 'xcode', 'version': 1}}, indent=2))
+    def sprite(p):
+        number = p['id']
+        asset = assets / f'pokemon-{number:03d}.imageset'
+        path = asset / 'sprite.png'
+        slug = slug_by_id[number]
+        urls = [f'https://img.pokemondb.net/sprites/black-white/normal/{slug}.png', f'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{number}.png']
+        for source in urls:
+            try:
+                data = download(source, path)
+                if not data.startswith(b'\x89PNG'):
+                    path.unlink()
+                    raise ValueError('Not a PNG')
+                break
+            except Exception:
+                if source == urls[-1]:
+                    raise
+        (asset / 'Contents.json').write_text(json.dumps({'images': [{'filename': 'sprite.png', 'idiom': 'universal'}], 'info': {'author': 'xcode', 'version': 1}}, indent=2))
+        return number, source
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        sources = dict(pool.map(sprite, entries))
+    (RESOURCES / 'sprite-sources.json').write_text(json.dumps(sources, indent=2) + '\n')
+    font_dir = RESOURCES / 'Fonts'
+    font_dir.mkdir(exist_ok=True)
+    for filename in ['PressStart2P-Regular.ttf', 'OFL.txt']:
+        target = 'PressStart2P-OFL.txt' if filename == 'OFL.txt' else filename
+        download('https://raw.githubusercontent.com/google/fonts/main/ofl/pressstart2p/' + filename, font_dir / target)
+    fusion_url = 'https://github.com/TakWolf/fusion-pixel-font/releases/download/2026.10.16/fusion-pixel-font-12px-proportional-otf-v2026.10.16.zip'
+    archive = download(fusion_url, CACHE / 'fusion-pixel-font.zip')
+    with zipfile.ZipFile(io.BytesIO(archive)) as zipped:
+        for name in zipped.namelist():
+            if name.endswith('zh_hans.otf') or name.endswith('OFL.txt') or name.endswith('LICENSE.txt'):
+                output = font_dir / ('FusionPixel-OFL.txt' if not name.endswith('.otf') else 'FusionPixel-12px-zh-Hans.otf')
+                output.write_bytes(zipped.read(name))
+    print(f'Built {len(entries)} bilingual entries and {len(sources)} sprites.')
+    print('Pikachu:', entries[24])
+    print('Fonts:', [p.name for p in font_dir.iterdir()])
+
+if __name__ == '__main__':
+    main()

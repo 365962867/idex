@@ -1,0 +1,126 @@
+import SwiftUI
+
+enum DexTheme {
+    static let red = Color(red: 0.70, green: 0.075, blue: 0.105)
+    static let ink = Color(red: 0.12, green: 0.17, blue: 0.13)
+    static let lcd = Color(red: 0.72, green: 0.81, blue: 0.58)
+    static let cream = Color(red: 0.86, green: 0.86, blue: 0.77)
+    static let charcoal = Color(red: 0.12, green: 0.14, blue: 0.15)
+    static func pixel(_ size: CGFloat) -> Font { .custom("PressStart2P-Regular", size: size) }
+}
+
+struct ShellSurface: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Color(red: 0.91, green: 0.21, blue: 0.24), DexTheme.red, Color(red: 0.55, green: 0.035, blue: 0.065)], startPoint: .topLeading, endPoint: .bottomTrailing)
+            Canvas { context, size in
+                for x in stride(from: 0.0, to: size.width, by: 4) {
+                    for y in stride(from: 0.0, to: size.height, by: 4) {
+                        let alpha = (Int(x * 7 + y * 13) % 9 == 0) ? 0.10 : 0.025
+                        context.fill(Path(CGRect(x: x, y: y, width: 1, height: 1)), with: .color(.white.opacity(alpha)))
+                    }
+                }
+            }.allowsHitTesting(false)
+            RoundedRectangle(cornerRadius: 30).stroke(.black.opacity(0.35), lineWidth: 5).padding(9)
+            RoundedRectangle(cornerRadius: 26).stroke(.white.opacity(0.16), lineWidth: 1).padding(12)
+        }
+    }
+}
+
+struct Screw: View {
+    var body: some View {
+        Circle().fill(LinearGradient(colors: [.gray, .black.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay { Capsule().fill(.black.opacity(0.7)).frame(width: 7, height: 1.5).rotationEffect(.degrees(-35)) }
+            .overlay { Circle().stroke(.white.opacity(0.3), lineWidth: 0.6) }
+            .frame(width: 12, height: 12).shadow(color: .black.opacity(0.6), radius: 1, y: 1)
+            .accessibilityHidden(true)
+    }
+}
+
+struct Indicator: View {
+    var color: Color
+    var size: CGFloat = 10
+    var body: some View {
+        Circle().fill(RadialGradient(colors: [.white.opacity(0.95), color, color.opacity(0.45)], center: .init(x: 0.32, y: 0.25), startRadius: 0, endRadius: size * 0.8))
+            .overlay { Circle().stroke(.black.opacity(0.65), lineWidth: 2) }
+            .frame(width: size, height: size)
+            .shadow(color: color.opacity(0.4), radius: 4)
+            .accessibilityHidden(true)
+    }
+}
+
+struct Lens: View {
+    var body: some View {
+        Circle().fill(LinearGradient(colors: [.white, Color(white: 0.5), Color(white: 0.85)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .overlay { Circle().fill(Color(white: 0.13)).padding(6) }
+            .overlay { Circle().fill(RadialGradient(colors: [Color(red: 0.51, green: 0.98, blue: 1), Color(red: 0.03, green: 0.68, blue: 0.85), Color(red: 0.02, green: 0.24, blue: 0.43)], center: .init(x: 0.35, y: 0.25), startRadius: 0, endRadius: 57)).padding(9) }
+            .overlay(alignment: .topLeading) { Ellipse().fill(.white.opacity(0.7)).frame(width: 23, height: 12).rotationEffect(.degrees(-40)).offset(x: 15, y: 15) }
+            .frame(width: 70, height: 70)
+            .shadow(color: .black.opacity(0.55), radius: 3, x: 2, y: 5)
+            .accessibilityHidden(true)
+    }
+}
+
+struct HardwareButtonStyle: ButtonStyle {
+    var color: Color = DexTheme.charcoal
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(DexTheme.cream)
+            .padding(.horizontal, 16).frame(minHeight: 44)
+            .background(LinearGradient(colors: [color.opacity(0.85), color], startPoint: .top, endPoint: .bottom), in: RoundedRectangle(cornerRadius: 8))
+            .overlay { RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.17), lineWidth: 1).padding(1) }
+            .overlay { RoundedRectangle(cornerRadius: 8).stroke(.black.opacity(0.6), lineWidth: 2) }
+            .shadow(color: .black.opacity(0.6), radius: configuration.isPressed ? 0 : 1, x: 0, y: configuration.isPressed ? 1 : 4)
+            .offset(y: configuration.isPressed ? 3 : 0)
+    }
+}
+
+struct LCDPanel<Content: View>: View {
+    @ViewBuilder var content: Content
+    var body: some View {
+        content.padding(15).foregroundStyle(DexTheme.ink)
+            .background(DexTheme.lcd.gradient)
+            .overlay(alignment: .top) { Rectangle().fill(.black.opacity(0.18)).frame(height: 3) }
+            .overlay { ScanLines().allowsHitTesting(false) }
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .padding(7).background(DexTheme.charcoal, in: RoundedRectangle(cornerRadius: 10))
+            .overlay { RoundedRectangle(cornerRadius: 10).stroke(.black.opacity(0.65), lineWidth: 2) }
+            .shadow(color: .white.opacity(0.15), radius: 0, y: 1)
+    }
+}
+
+struct ScanLines: View {
+    var body: some View {
+        Canvas { context, size in
+            for y in stride(from: 0.0, to: size.height, by: 3) {
+                context.fill(Path(CGRect(x: 0, y: y, width: size.width, height: 0.5)), with: .color(.black.opacity(0.075)))
+            }
+        }
+    }
+}
+
+struct SpeakerGrille: View {
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<6) { _ in
+                Capsule().fill(.black.opacity(0.65)).frame(width: 4, height: 29)
+                    .shadow(color: .white.opacity(0.16), radius: 0, x: 1, y: 1)
+            }
+        }.rotationEffect(.degrees(-15)).accessibilityHidden(true)
+    }
+}
+
+struct HingeSpine: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Color(red: 0.29, green: 0.02, blue: 0.035), DexTheme.red, Color(red: 0.9, green: 0.23, blue: 0.23), DexTheme.red, .black.opacity(0.7)], startPoint: .leading, endPoint: .trailing)
+            VStack {
+                ForEach(0..<4) { _ in
+                    Spacer()
+                    Rectangle().fill(.black.opacity(0.55)).frame(height: 3).overlay(alignment: .bottom) { Rectangle().fill(.white.opacity(0.2)).frame(height: 1) }
+                }
+                Spacer()
+            }
+        }.frame(width: 19).accessibilityHidden(true)
+    }
+}

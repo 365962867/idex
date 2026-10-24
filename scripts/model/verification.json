@@ -1,0 +1,52 @@
+[
+  {
+    "input": "sample_pikachu.png",
+    "expectedID": 25,
+    "topID": 25,
+    "confidence": 0.8842703700065613,
+    "logitMargin": 5.6708984375,
+    "accepted": true,
+    "maximumAbsoluteConversionError": 0.004119873046875,
+    "sameTop1AsPyTorch": true
+  },
+  {
+    "input": "sample_charizard.png",
+    "expectedID": 6,
+    "topID": 6,
+    "confidence": 0.8779370784759521,
+    "logitMargin": 5.2099609375,
+    "accepted": true,
+    "maximumAbsoluteConversionError": 0.006984710693359375,
+    "sameTop1AsPyTorch": true
+  },
+  {
+    "input": "blank-white",
+    "expectedID": null,
+    "topID": 102,
+    "confidence": 0.02464566007256508,
+    "logitMargin": 0.0284423828125,
+    "accepted": false,
+    "maximumAbsoluteConversionError": 0.005911827087402344,
+    "sameTop1AsPyTorch": true
+  },
+  {
+    "input": "blank-black",
+    "expectedID": null,
+    "topID": 147,
+    "confidence": 0.025219418108463287,
+    "logitMargin": 0.3623046875,
+    "accepted": false,
+    "maximumAbsoluteConversionError": 0.0136452317237854,
+    "sameTop1AsPyTorch": true
+  },
+  {
+    "input": "random-noise",
+    "expectedID": null,
+    "topID": 48,
+    "confidence": 0.018490023910999298,
+    "logitMargin": 0.0614013671875,
+    "accepted": false,
+    "maximumAbsoluteConversionError": 0.008459806442260742,
+    "sameTop1AsPyTorch": true
+  }
+]

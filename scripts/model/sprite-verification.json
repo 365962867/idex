@@ -1,0 +1,1066 @@
+{
+  "input": "Bundled Black/White 96px sprites, white alpha composite, nearest-neighbor resize to224",
+  "count": 151,
+  "correctTop1": 151,
+  "accepted": 146,
+  "acceptedWrong": 0,
+  "records": [
+    {
+      "expectedID": 1,
+      "topID": 1,
+      "confidence": 0.8824172019958496,
+      "logitMargin": 4.43292236328125,
+      "accepted": true
+    },
+    {
+      "expectedID": 2,
+      "topID": 2,
+      "confidence": 0.9222568869590759,
+      "logitMargin": 5.4619140625,
+      "accepted": true
+    },
+    {
+      "expectedID": 3,
+      "topID": 3,
+      "confidence": 0.8309697508811951,
+      "logitMargin": 4.4180908203125,
+      "accepted": true
+    },
+    {
+      "expectedID": 4,
+      "topID": 4,
+      "confidence": 0.8438409566879272,
+      "logitMargin": 4.728515625,
+      "accepted": true
+    },
+    {
+      "expectedID": 5,
+      "topID": 5,
+      "confidence": 0.8921966552734375,
+      "logitMargin": 4.5537109375,
+      "accepted": true
+    },
+    {
+      "expectedID": 6,
+      "topID": 6,
+      "confidence": 0.8881536722183228,
+      "logitMargin": 4.81591796875,
+      "accepted": true
+    },
+    {
+      "expectedID": 7,
+      "topID": 7,
+      "confidence": 0.8934376239776611,
+      "logitMargin": 5.552734375,
+      "accepted": true
+    },
+    {
+      "expectedID": 8,
+      "topID": 8,
+      "confidence": 0.9157893061637878,
+      "logitMargin": 5.55859375,
+      "accepted": true
+    },
+    {
+      "expectedID": 9,
+      "topID": 9,
+      "confidence": 0.9459341168403625,
+      "logitMargin": 5.43896484375,
+      "accepted": true
+    },
+    {
+      "expectedID": 10,
+      "topID": 10,
+      "confidence": 0.9350343346595764,
+      "logitMargin": 6.3515625,
+      "accepted": true
+    },
+    {
+      "expectedID": 11,
+      "topID": 11,
+      "confidence": 0.9376811385154724,
+      "logitMargin": 5.337554931640625,
+      "accepted": true
+    },
+    {
+      "expectedID": 12,
+      "topID": 12,
+      "confidence": 0.9542762041091919,
+      "logitMargin": 5.632568359375,
+      "accepted": true
+    },
+    {
+      "expectedID": 13,
+      "topID": 13,
+      "confidence": 0.8439717292785645,
+      "logitMargin": 4.1614990234375,
+      "accepted": true
+    },
+    {
+      "expectedID": 14,
+      "topID": 14,
+      "confidence": 0.9112773537635803,
+      "logitMargin": 4.825439453125,
+      "accepted": true
+    },
+    {
+      "expectedID": 15,
+      "topID": 15,
+      "confidence": 0.9335249662399292,
+      "logitMargin": 5.830078125,
+      "accepted": true
+    },
+    {
+      "expectedID": 16,
+      "topID": 16,
+      "confidence": 0.9006178975105286,
+      "logitMargin": 4.94384765625,
+      "accepted": true
+    },
+    {
+      "expectedID": 17,
+      "topID": 17,
+      "confidence": 0.8501678705215454,
+      "logitMargin": 3.55029296875,
+      "accepted": true
+    },
+    {
+      "expectedID": 18,
+      "topID": 18,
+      "confidence": 0.9398918151855469,
+      "logitMargin": 5.7138671875,
+      "accepted": true
+    },
+    {
+      "expectedID": 19,
+      "topID": 19,
+      "confidence": 0.8433893918991089,
+      "logitMargin": 4.720703125,
+      "accepted": true
+    },
+    {
+      "expectedID": 20,
+      "topID": 20,
+      "confidence": 0.8988562226295471,
+      "logitMargin": 4.75439453125,
+      "accepted": true
+    },
+    {
+      "expectedID": 21,
+      "topID": 21,
+      "confidence": 0.7924923896789551,
+      "logitMargin": 3.724609375,
+      "accepted": true
+    },
+    {
+      "expectedID": 22,
+      "topID": 22,
+      "confidence": 0.8136770129203796,
+      "logitMargin": 3.32421875,
+      "accepted": true
+    },
+    {
+      "expectedID": 23,
+      "topID": 23,
+      "confidence": 0.9768200516700745,
+      "logitMargin": 6.171875,
+      "accepted": true
+    },
+    {
+      "expectedID": 24,
+      "topID": 24,
+      "confidence": 0.9432438611984253,
+      "logitMargin": 6.0,
+      "accepted": true
+    },
+    {
+      "expectedID": 25,
+      "topID": 25,
+      "confidence": 0.9312544465065002,
+      "logitMargin": 5.18017578125,
+      "accepted": true
+    },
+    {
+      "expectedID": 26,
+      "topID": 26,
+      "confidence": 0.8996540904045105,
+      "logitMargin": 5.1611328125,
+      "accepted": true
+    },
+    {
+      "expectedID": 27,
+      "topID": 27,
+      "confidence": 0.9177249670028687,
+      "logitMargin": 4.527099609375,
+      "accepted": true
+    },
+    {
+      "expectedID": 28,
+      "topID": 28,
+      "confidence": 0.8429425954818726,
+      "logitMargin": 4.8505859375,
+      "accepted": true
+    },
+    {
+      "expectedID": 29,
+      "topID": 29,
+      "confidence": 0.949944019317627,
+      "logitMargin": 5.2041015625,
+      "accepted": true
+    },
+    {
+      "expectedID": 30,
+      "topID": 30,
+      "confidence": 0.9072785973548889,
+      "logitMargin": 5.2607421875,
+      "accepted": true
+    },
+    {
+      "expectedID": 31,
+      "topID": 31,
+      "confidence": 0.8647310733795166,
+      "logitMargin": 5.2568359375,
+      "accepted": true
+    },
+    {
+      "expectedID": 32,
+      "topID": 32,
+      "confidence": 0.9227372407913208,
+      "logitMargin": 3.736328125,
+      "accepted": true
+    },
+    {
+      "expectedID": 33,
+      "topID": 33,
+      "confidence": 0.8790433406829834,
+      "logitMargin": 4.62841796875,
+      "accepted": true
+    },
+    {
+      "expectedID": 34,
+      "topID": 34,
+      "confidence": 0.923913836479187,
+      "logitMargin": 6.1025390625,
+      "accepted": true
+    },
+    {
+      "expectedID": 35,
+      "topID": 35,
+      "confidence": 0.9762353897094727,
+      "logitMargin": 5.52490234375,
+      "accepted": true
+    },
+    {
+      "expectedID": 36,
+      "topID": 36,
+      "confidence": 0.9461268186569214,
+      "logitMargin": 5.5501708984375,
+      "accepted": true
+    },
+    {
+      "expectedID": 37,
+      "topID": 37,
+      "confidence": 0.9206087589263916,
+      "logitMargin": 3.80810546875,
+      "accepted": true
+    },
+    {
+      "expectedID": 38,
+      "topID": 38,
+      "confidence": 0.8714324831962585,
+      "logitMargin": 4.5291748046875,
+      "accepted": true
+    },
+    {
+      "expectedID": 39,
+      "topID": 39,
+      "confidence": 0.8814978003501892,
+      "logitMargin": 2.708984375,
+      "accepted": true
+    },
+    {
+      "expectedID": 40,
+      "topID": 40,
+      "confidence": 0.8940879702568054,
+      "logitMargin": 5.47216796875,
+      "accepted": true
+    },
+    {
+      "expectedID": 41,
+      "topID": 41,
+      "confidence": 0.9323515295982361,
+      "logitMargin": 5.05419921875,
+      "accepted": true
+    },
+    {
+      "expectedID": 42,
+      "topID": 42,
+      "confidence": 0.9012236595153809,
+      "logitMargin": 4.381103515625,
+      "accepted": true
+    },
+    {
+      "expectedID": 43,
+      "topID": 43,
+      "confidence": 0.8921741843223572,
+      "logitMargin": 5.18408203125,
+      "accepted": true
+    },
+    {
+      "expectedID": 44,
+      "topID": 44,
+      "confidence": 0.9283995628356934,
+      "logitMargin": 5.720458984375,
+      "accepted": true
+    },
+    {
+      "expectedID": 45,
+      "topID": 45,
+      "confidence": 0.8734965324401855,
+      "logitMargin": 5.009521484375,
+      "accepted": true
+    },
+    {
+      "expectedID": 46,
+      "topID": 46,
+      "confidence": 0.8763958811759949,
+      "logitMargin": 4.7529296875,
+      "accepted": true
+    },
+    {
+      "expectedID": 47,
+      "topID": 47,
+      "confidence": 0.9104117751121521,
+      "logitMargin": 5.8359375,
+      "accepted": true
+    },
+    {
+      "expectedID": 48,
+      "topID": 48,
+      "confidence": 0.935407817363739,
+      "logitMargin": 5.003662109375,
+      "accepted": true
+    },
+    {
+      "expectedID": 49,
+      "topID": 49,
+      "confidence": 0.9121481776237488,
+      "logitMargin": 5.10791015625,
+      "accepted": true
+    },
+    {
+      "expectedID": 50,
+      "topID": 50,
+      "confidence": 0.9636255502700806,
+      "logitMargin": 5.41412353515625,
+      "accepted": true
+    },
+    {
+      "expectedID": 51,
+      "topID": 51,
+      "confidence": 0.9427911639213562,
+      "logitMargin": 4.06494140625,
+      "accepted": true
+    },
+    {
+      "expectedID": 52,
+      "topID": 52,
+      "confidence": 0.931859016418457,
+      "logitMargin": 5.119384765625,
+      "accepted": true
+    },
+    {
+      "expectedID": 53,
+      "topID": 53,
+      "confidence": 0.8159564137458801,
+      "logitMargin": 3.72705078125,
+      "accepted": true
+    },
+    {
+      "expectedID": 54,
+      "topID": 54,
+      "confidence": 0.9624261260032654,
+      "logitMargin": 4.9014892578125,
+      "accepted": true
+    },
+    {
+      "expectedID": 55,
+      "topID": 55,
+      "confidence": 0.8971514105796814,
+      "logitMargin": 5.5654296875,
+      "accepted": true
+    },
+    {
+      "expectedID": 56,
+      "topID": 56,
+      "confidence": 0.9346204996109009,
+      "logitMargin": 5.603515625,
+      "accepted": true
+    },
+    {
+      "expectedID": 57,
+      "topID": 57,
+      "confidence": 0.8940990567207336,
+      "logitMargin": 3.837890625,
+      "accepted": true
+    },
+    {
+      "expectedID": 58,
+      "topID": 58,
+      "confidence": 0.8513504266738892,
+      "logitMargin": 3.7620849609375,
+      "accepted": true
+    },
+    {
+      "expectedID": 59,
+      "topID": 59,
+      "confidence": 0.8942764401435852,
+      "logitMargin": 5.017822265625,
+      "accepted": true
+    },
+    {
+      "expectedID": 60,
+      "topID": 60,
+      "confidence": 0.9698542356491089,
+      "logitMargin": 6.45263671875,
+      "accepted": true
+    },
+    {
+      "expectedID": 61,
+      "topID": 61,
+      "confidence": 0.9097724556922913,
+      "logitMargin": 4.2392578125,
+      "accepted": true
+    },
+    {
+      "expectedID": 62,
+      "topID": 62,
+      "confidence": 0.9116072654724121,
+      "logitMargin": 3.455078125,
+      "accepted": true
+    },
+    {
+      "expectedID": 63,
+      "topID": 63,
+      "confidence": 0.9366858601570129,
+      "logitMargin": 5.453125,
+      "accepted": true
+    },
+    {
+      "expectedID": 64,
+      "topID": 64,
+      "confidence": 0.9540602564811707,
+      "logitMargin": 5.4183349609375,
+      "accepted": true
+    },
+    {
+      "expectedID": 65,
+      "topID": 65,
+      "confidence": 0.6489976644515991,
+      "logitMargin": 1.619140625,
+      "accepted": false
+    },
+    {
+      "expectedID": 66,
+      "topID": 66,
+      "confidence": 0.9199797511100769,
+      "logitMargin": 5.8798828125,
+      "accepted": true
+    },
+    {
+      "expectedID": 67,
+      "topID": 67,
+      "confidence": 0.8114596009254456,
+      "logitMargin": 3.7530059814453125,
+      "accepted": true
+    },
+    {
+      "expectedID": 68,
+      "topID": 68,
+      "confidence": 0.9446664452552795,
+      "logitMargin": 5.77734375,
+      "accepted": true
+    },
+    {
+      "expectedID": 69,
+      "topID": 69,
+      "confidence": 0.9096879363059998,
+      "logitMargin": 4.4833984375,
+      "accepted": true
+    },
+    {
+      "expectedID": 70,
+      "topID": 70,
+      "confidence": 0.9107605218887329,
+      "logitMargin": 5.2236328125,
+      "accepted": true
+    },
+    {
+      "expectedID": 71,
+      "topID": 71,
+      "confidence": 0.9277404546737671,
+      "logitMargin": 5.5693359375,
+      "accepted": true
+    },
+    {
+      "expectedID": 72,
+      "topID": 72,
+      "confidence": 0.8756687641143799,
+      "logitMargin": 5.35107421875,
+      "accepted": true
+    },
+    {
+      "expectedID": 73,
+      "topID": 73,
+      "confidence": 0.8855602145195007,
+      "logitMargin": 5.18505859375,
+      "accepted": true
+    },
+    {
+      "expectedID": 74,
+      "topID": 74,
+      "confidence": 0.8597604632377625,
+      "logitMargin": 4.611083984375,
+      "accepted": true
+    },
+    {
+      "expectedID": 75,
+      "topID": 75,
+      "confidence": 0.860099732875824,
+      "logitMargin": 3.947265625,
+      "accepted": true
+    },
+    {
+      "expectedID": 76,
+      "topID": 76,
+      "confidence": 0.9363600611686707,
+      "logitMargin": 6.3466796875,
+      "accepted": true
+    },
+    {
+      "expectedID": 77,
+      "topID": 77,
+      "confidence": 0.9010497331619263,
+      "logitMargin": 3.775390625,
+      "accepted": true
+    },
+    {
+      "expectedID": 78,
+      "topID": 78,
+      "confidence": 0.9175568222999573,
+      "logitMargin": 4.55078125,
+      "accepted": true
+    },
+    {
+      "expectedID": 79,
+      "topID": 79,
+      "confidence": 0.9410847425460815,
+      "logitMargin": 5.48486328125,
+      "accepted": true
+    },
+    {
+      "expectedID": 80,
+      "topID": 80,
+      "confidence": 0.8989287614822388,
+      "logitMargin": 4.733642578125,
+      "accepted": true
+    },
+    {
+      "expectedID": 81,
+      "topID": 81,
+      "confidence": 0.9371073246002197,
+      "logitMargin": 5.1162109375,
+      "accepted": true
+    },
+    {
+      "expectedID": 82,
+      "topID": 82,
+      "confidence": 0.9539119005203247,
+      "logitMargin": 6.4794921875,
+      "accepted": true
+    },
+    {
+      "expectedID": 83,
+      "topID": 83,
+      "confidence": 0.6143417358398438,
+      "logitMargin": 2.01513671875,
+      "accepted": false
+    },
+    {
+      "expectedID": 84,
+      "topID": 84,
+      "confidence": 0.8416436910629272,
+      "logitMargin": 2.67578125,
+      "accepted": true
+    },
+    {
+      "expectedID": 85,
+      "topID": 85,
+      "confidence": 0.8474529385566711,
+      "logitMargin": 4.8193359375,
+      "accepted": true
+    },
+    {
+      "expectedID": 86,
+      "topID": 86,
+      "confidence": 0.7434773445129395,
+      "logitMargin": 3.2109375,
+      "accepted": false
+    },
+    {
+      "expectedID": 87,
+      "topID": 87,
+      "confidence": 0.8821675777435303,
+      "logitMargin": 3.97802734375,
+      "accepted": true
+    },
+    {
+      "expectedID": 88,
+      "topID": 88,
+      "confidence": 0.9538248181343079,
+      "logitMargin": 5.4527587890625,
+      "accepted": true
+    },
+    {
+      "expectedID": 89,
+      "topID": 89,
+      "confidence": 0.8470212817192078,
+      "logitMargin": 3.0126953125,
+      "accepted": true
+    },
+    {
+      "expectedID": 90,
+      "topID": 90,
+      "confidence": 0.785155177116394,
+      "logitMargin": 4.62451171875,
+      "accepted": true
+    },
+    {
+      "expectedID": 91,
+      "topID": 91,
+      "confidence": 0.9176909327507019,
+      "logitMargin": 4.618408203125,
+      "accepted": true
+    },
+    {
+      "expectedID": 92,
+      "topID": 92,
+      "confidence": 0.9207898378372192,
+      "logitMargin": 5.64111328125,
+      "accepted": true
+    },
+    {
+      "expectedID": 93,
+      "topID": 93,
+      "confidence": 0.8860864639282227,
+      "logitMargin": 4.635009765625,
+      "accepted": true
+    },
+    {
+      "expectedID": 94,
+      "topID": 94,
+      "confidence": 0.9177684187889099,
+      "logitMargin": 5.2574462890625,
+      "accepted": true
+    },
+    {
+      "expectedID": 95,
+      "topID": 95,
+      "confidence": 0.9361335039138794,
+      "logitMargin": 6.0517578125,
+      "accepted": true
+    },
+    {
+      "expectedID": 96,
+      "topID": 96,
+      "confidence": 0.8647098541259766,
+      "logitMargin": 3.0205078125,
+      "accepted": true
+    },
+    {
+      "expectedID": 97,
+      "topID": 97,
+      "confidence": 0.8509194254875183,
+      "logitMargin": 4.656494140625,
+      "accepted": true
+    },
+    {
+      "expectedID": 98,
+      "topID": 98,
+      "confidence": 0.750479519367218,
+      "logitMargin": 1.720703125,
+      "accepted": false
+    },
+    {
+      "expectedID": 99,
+      "topID": 99,
+      "confidence": 0.8869953751564026,
+      "logitMargin": 3.7939453125,
+      "accepted": true
+    },
+    {
+      "expectedID": 100,
+      "topID": 100,
+      "confidence": 0.9205789566040039,
+      "logitMargin": 5.6025390625,
+      "accepted": true
+    },
+    {
+      "expectedID": 101,
+      "topID": 101,
+      "confidence": 0.9016192555427551,
+      "logitMargin": 5.78076171875,
+      "accepted": true
+    },
+    {
+      "expectedID": 102,
+      "topID": 102,
+      "confidence": 0.9033941030502319,
+      "logitMargin": 5.0078125,
+      "accepted": true
+    },
+    {
+      "expectedID": 103,
+      "topID": 103,
+      "confidence": 0.8719609379768372,
+      "logitMargin": 5.69140625,
+      "accepted": true
+    },
+    {
+      "expectedID": 104,
+      "topID": 104,
+      "confidence": 0.8662112355232239,
+      "logitMargin": 2.939453125,
+      "accepted": true
+    },
+    {
+      "expectedID": 105,
+      "topID": 105,
+      "confidence": 0.9025979042053223,
+      "logitMargin": 3.4892578125,
+      "accepted": true
+    },
+    {
+      "expectedID": 106,
+      "topID": 106,
+      "confidence": 0.7306907773017883,
+      "logitMargin": 4.1357421875,
+      "accepted": true
+    },
+    {
+      "expectedID": 107,
+      "topID": 107,
+      "confidence": 0.7512185573577881,
+      "logitMargin": 3.01318359375,
+      "accepted": true
+    },
+    {
+      "expectedID": 108,
+      "topID": 108,
+      "confidence": 0.9636945128440857,
+      "logitMargin": 6.4482421875,
+      "accepted": true
+    },
+    {
+      "expectedID": 109,
+      "topID": 109,
+      "confidence": 0.7960050702095032,
+      "logitMargin": 4.1796875,
+      "accepted": true
+    },
+    {
+      "expectedID": 110,
+      "topID": 110,
+      "confidence": 0.9498715400695801,
+      "logitMargin": 5.56103515625,
+      "accepted": true
+    },
+    {
+      "expectedID": 111,
+      "topID": 111,
+      "confidence": 0.9378648400306702,
+      "logitMargin": 5.742919921875,
+      "accepted": true
+    },
+    {
+      "expectedID": 112,
+      "topID": 112,
+      "confidence": 0.9310160279273987,
+      "logitMargin": 5.9482421875,
+      "accepted": true
+    },
+    {
+      "expectedID": 113,
+      "topID": 113,
+      "confidence": 0.9702657461166382,
+      "logitMargin": 5.933349609375,
+      "accepted": true
+    },
+    {
+      "expectedID": 114,
+      "topID": 114,
+      "confidence": 0.925881564617157,
+      "logitMargin": 5.70263671875,
+      "accepted": true
+    },
+    {
+      "expectedID": 115,
+      "topID": 115,
+      "confidence": 0.932993471622467,
+      "logitMargin": 5.55859375,
+      "accepted": true
+    },
+    {
+      "expectedID": 116,
+      "topID": 116,
+      "confidence": 0.7810006141662598,
+      "logitMargin": 3.196533203125,
+      "accepted": true
+    },
+    {
+      "expectedID": 117,
+      "topID": 117,
+      "confidence": 0.7466708421707153,
+      "logitMargin": 3.74169921875,
+      "accepted": true
+    },
+    {
+      "expectedID": 118,
+      "topID": 118,
+      "confidence": 0.9204898476600647,
+      "logitMargin": 5.85400390625,
+      "accepted": true
+    },
+    {
+      "expectedID": 119,
+      "topID": 119,
+      "confidence": 0.877646803855896,
+      "logitMargin": 4.83203125,
+      "accepted": true
+    },
+    {
+      "expectedID": 120,
+      "topID": 120,
+      "confidence": 0.9240099787712097,
+      "logitMargin": 5.39501953125,
+      "accepted": true
+    },
+    {
+      "expectedID": 121,
+      "topID": 121,
+      "confidence": 0.9016794562339783,
+      "logitMargin": 5.285888671875,
+      "accepted": true
+    },
+    {
+      "expectedID": 122,
+      "topID": 122,
+      "confidence": 0.9534163475036621,
+      "logitMargin": 5.630126953125,
+      "accepted": true
+    },
+    {
+      "expectedID": 123,
+      "topID": 123,
+      "confidence": 0.8767518401145935,
+      "logitMargin": 5.022216796875,
+      "accepted": true
+    },
+    {
+      "expectedID": 124,
+      "topID": 124,
+      "confidence": 0.8782569766044617,
+      "logitMargin": 5.5986328125,
+      "accepted": true
+    },
+    {
+      "expectedID": 125,
+      "topID": 125,
+      "confidence": 0.9123817086219788,
+      "logitMargin": 4.579864501953125,
+      "accepted": true
+    },
+    {
+      "expectedID": 126,
+      "topID": 126,
+      "confidence": 0.8955720067024231,
+      "logitMargin": 5.61279296875,
+      "accepted": true
+    },
+    {
+      "expectedID": 127,
+      "topID": 127,
+      "confidence": 0.8998161554336548,
+      "logitMargin": 5.75,
+      "accepted": true
+    },
+    {
+      "expectedID": 128,
+      "topID": 128,
+      "confidence": 0.8415312170982361,
+      "logitMargin": 5.17578125,
+      "accepted": true
+    },
+    {
+      "expectedID": 129,
+      "topID": 129,
+      "confidence": 0.5051226019859314,
+      "logitMargin": 0.8798828125,
+      "accepted": false
+    },
+    {
+      "expectedID": 130,
+      "topID": 130,
+      "confidence": 0.9724388718605042,
+      "logitMargin": 6.74609375,
+      "accepted": true
+    },
+    {
+      "expectedID": 131,
+      "topID": 131,
+      "confidence": 0.9488868713378906,
+      "logitMargin": 6.5068359375,
+      "accepted": true
+    },
+    {
+      "expectedID": 132,
+      "topID": 132,
+      "confidence": 0.922926664352417,
+      "logitMargin": 5.318359375,
+      "accepted": true
+    },
+    {
+      "expectedID": 133,
+      "topID": 133,
+      "confidence": 0.7921395301818848,
+      "logitMargin": 2.490234375,
+      "accepted": true
+    },
+    {
+      "expectedID": 134,
+      "topID": 134,
+      "confidence": 0.9176530838012695,
+      "logitMargin": 5.35205078125,
+      "accepted": true
+    },
+    {
+      "expectedID": 135,
+      "topID": 135,
+      "confidence": 0.9675337076187134,
+      "logitMargin": 6.65283203125,
+      "accepted": true
+    },
+    {
+      "expectedID": 136,
+      "topID": 136,
+      "confidence": 0.8784821629524231,
+      "logitMargin": 5.1884765625,
+      "accepted": true
+    },
+    {
+      "expectedID": 137,
+      "topID": 137,
+      "confidence": 0.892901599407196,
+      "logitMargin": 4.719970703125,
+      "accepted": true
+    },
+    {
+      "expectedID": 138,
+      "topID": 138,
+      "confidence": 0.95818030834198,
+      "logitMargin": 5.28997802734375,
+      "accepted": true
+    },
+    {
+      "expectedID": 139,
+      "topID": 139,
+      "confidence": 0.9166660308837891,
+      "logitMargin": 5.1025390625,
+      "accepted": true
+    },
+    {
+      "expectedID": 140,
+      "topID": 140,
+      "confidence": 0.8407219648361206,
+      "logitMargin": 4.992431640625,
+      "accepted": true
+    },
+    {
+      "expectedID": 141,
+      "topID": 141,
+      "confidence": 0.9192127585411072,
+      "logitMargin": 5.63720703125,
+      "accepted": true
+    },
+    {
+      "expectedID": 142,
+      "topID": 142,
+      "confidence": 0.9372718334197998,
+      "logitMargin": 5.29345703125,
+      "accepted": true
+    },
+    {
+      "expectedID": 143,
+      "topID": 143,
+      "confidence": 0.9437640309333801,
+      "logitMargin": 6.314453125,
+      "accepted": true
+    },
+    {
+      "expectedID": 144,
+      "topID": 144,
+      "confidence": 0.8728498220443726,
+      "logitMargin": 5.6396484375,
+      "accepted": true
+    },
+    {
+      "expectedID": 145,
+      "topID": 145,
+      "confidence": 0.8992673754692078,
+      "logitMargin": 4.72918701171875,
+      "accepted": true
+    },
+    {
+      "expectedID": 146,
+      "topID": 146,
+      "confidence": 0.8920267820358276,
+      "logitMargin": 4.492919921875,
+      "accepted": true
+    },
+    {
+      "expectedID": 147,
+      "topID": 147,
+      "confidence": 0.8389692902565002,
+      "logitMargin": 2.388671875,
+      "accepted": true
+    },
+    {
+      "expectedID": 148,
+      "topID": 148,
+      "confidence": 0.9295552968978882,
+      "logitMargin": 5.7685546875,
+      "accepted": true
+    },
+    {
+      "expectedID": 149,
+      "topID": 149,
+      "confidence": 0.8956611156463623,
+      "logitMargin": 5.0,
+      "accepted": true
+    },
+    {
+      "expectedID": 150,
+      "topID": 150,
+      "confidence": 0.9193155169487,
+      "logitMargin": 5.7275390625,
+      "accepted": true
+    },
+    {
+      "expectedID": 151,
+      "topID": 151,
+      "confidence": 0.8952536582946777,
+      "logitMargin": 3.85986328125,
+      "accepted": true
+    }
+  ]
+}

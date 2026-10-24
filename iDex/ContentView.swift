@@ -1,24 +1,276 @@
-//
-//  ContentView.swift
-//  iDex
-//
-//  Created by Zihang Huang on 2026/10/24.
-//
-
 import SwiftUI
+import PhotosUI
 
 struct ContentView: View {
+    @State private var store = DexStore()
+    @State private var photo: PhotosPickerItem?
+    @State private var hingeIsOpen: Bool?
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        GeometryReader { proxy in
+            let geometry = DuoGeometry(size: proxy.size, hingeIsOpen: hingeIsOpen)
+            ZStack(alignment: .topTrailing) {
+                ShellSurface()
+                if geometry.isOpen {
+                    EntryPanel(store: store)
+                        .frame(width: max(0, geometry.rightOrigin - 19), height: proxy.size.height)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HingeSpine().frame(height: proxy.size.height)
+                        .position(x: geometry.rightOrigin - 9.5, y: proxy.size.height / 2)
+                }
+                ScannerPanel(store: store, photo: $photo, compact: !geometry.isOpen)
+                    .frame(width: geometry.panelWidth, height: proxy.size.height)
+                if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" {
+                    HingeObserver { value in
+                        if hingeIsOpen != nil, value != hingeIsOpen { DeviceAudio.shared.play(.open) }
+                        hingeIsOpen = value
+                    }.frame(width: 1, height: 1).allowsHitTesting(false)
+                }
+            }
+            .clipped()
+            .onChange(of: geometry.isOpen) { _, open in
+                if open && store.showingCompactEntry {
+                    store.showingCompactEntry = false
+                    store.showingCatalog = false
+                }
+            }
+            .onChange(of: store.identified) { _, value in
+                if value && !geometry.isOpen { store.showingCompactEntry = true }
+            }
         }
-        .padding()
+        .ignoresSafeArea()
+        .preferredColorScheme(.dark)
+        .environment(\.locale, Locale(identifier: store.language == .en ? "en" : "zh-Hans"))
+        .statusBarHidden()
+        .task { store.resume() }
+        .sheet(isPresented: Binding(get: { store.showingCatalog && !store.showingCompactEntry }, set: { store.showingCatalog = $0 })) { CatalogSheet(store: store) }
+        .sheet(isPresented: $store.showingSettings) { SettingsSheet(store: store) }
+        .fullScreenCover(isPresented: $store.showingCompactEntry) {
+            EntryPanel(store: store).background { ShellSurface() }.ignoresSafeArea().statusBarHidden()
+                .overlay(alignment: .topTrailing) {
+                    Button { store.showingCompactEntry = false } label: {
+                        Image(systemName: "xmark.circle.fill").font(.title2).padding(20)
+                    }.tint(DexTheme.cream).accessibilityLabel(store.text("Close record", "关闭记录")).accessibilityIdentifier("close-record")
+                }
+                .sheet(isPresented: $store.showingCatalog) { CatalogSheet(store: store) }
+        }
+        .onChange(of: photo) { _, item in
+            guard let item else { return }
+            Task { await store.importPhoto(item); photo = nil }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active {
+                store.suspend()
+            } else {
+                store.resume()
+            }
+        }
     }
 }
 
-#Preview {
-    ContentView()
+private struct ScannerPanel: View {
+    @Bindable var store: DexStore
+    @Binding var photo: PhotosPickerItem?
+    let compact: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            let layout = DuoGeometry(size: proxy.size)
+            let side = layout.viewfinder.width
+            ZStack(alignment: .topLeading) {
+                header.frame(height: 70).padding(.horizontal, 34).offset(y: 54)
+                HStack {
+                    pixel(store.text("OPTICAL SENSOR", "光学传感器"), 7).foregroundStyle(.white.opacity(0.65))
+                    Spacer()
+                    pixel(store.text("KANTO / 01", "关都 / 01"), 7).foregroundStyle(.white.opacity(0.65))
+                }.frame(width: proxy.size.width - 98).offset(x: 49, y: 146)
+                viewfinder(side: side).frame(width: side + 34, height: side + 34)
+                    .position(x: proxy.size.width / 2, y: layout.viewfinder.midY)
+                HStack(spacing: 10) {
+                    Button { store.chooseCamera() } label: { Image(systemName: "camera.fill").frame(width: 28) }
+                        .accessibilityLabel(store.text("Use camera", "使用相机")).accessibilityIdentifier("camera-button")
+                    PhotosPicker(selection: $photo, matching: .images) {
+                        Image(systemName: "photo.on.rectangle.angled").frame(width: 28)
+                    }.accessibilityLabel(store.text("Import photo", "导入照片"))
+                    Button { store.chooseSample() } label: { Image(systemName: "sparkles").frame(width: 28) }
+                        .accessibilityLabel(store.text("Try sample", "体验样本")).accessibilityIdentifier("sample-button")
+                    Spacer(minLength: 0)
+                    Button {
+                        if !store.useSample && store.capturedImage != nil { store.chooseCamera() }
+                        else { Task { await store.scan() } }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "viewfinder")
+                            pixel(store.isScanning ? store.text("SCANNING", "扫描中") : (store.capturedImage != nil && !store.useSample ? store.text("LIVE", "取景") : store.text("IDENTIFY", "识别")), 9)
+                        }
+                    }.buttonStyle(HardwareButtonStyle(color: Color(red: 0.11, green: 0.27, blue: 0.24)))
+                        .disabled(store.isScanning || (!store.useSample && store.capturedImage == nil && store.camera.status != .ready))
+                        .opacity(store.isScanning || (!store.useSample && store.capturedImage == nil && store.camera.status != .ready) ? 0.55 : 1)
+                        .accessibilityIdentifier("identify-button")
+                }
+                .buttonStyle(HardwareButtonStyle()).frame(width: proxy.size.width - 76).offset(x: 38, y: layout.viewfinder.maxY + 35)
+                footer.frame(width: proxy.size.width - 80).position(x: proxy.size.width / 2, y: proxy.size.height - 49)
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 13) {
+            Lens()
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 9) {
+                    Indicator(color: .red)
+                    Indicator(color: .yellow)
+                    Indicator(color: .green)
+                }
+                Text("iDEX").font(.system(size: 28, weight: .black, design: .rounded)).italic()
+                    .foregroundStyle(Color(red: 0.35, green: 0.02, blue: 0.035))
+                    .shadow(color: .white.opacity(0.3), radius: 0, y: 1)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 8) {
+                pixel(store.text("POKÉDEX", "宝可梦图鉴"), 10)
+                pixel(store.text("FIELD UNIT 001", "野外终端 001"), 6)
+            }.foregroundStyle(DexTheme.cream.opacity(0.9))
+        }
+    }
+
+    private func viewfinder(side: CGFloat) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 15)
+                .fill(LinearGradient(colors: [Color(white: 0.88), Color(white: 0.54), Color(white: 0.75)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .shadow(color: .black.opacity(0.55), radius: 3, x: 1, y: 5)
+            RoundedRectangle(cornerRadius: 6).fill(DexTheme.charcoal).padding(10)
+            ZStack {
+                DexTheme.lcd
+                if let captured = store.capturedImage {
+                    Image(uiImage: captured).resizable().scaledToFill()
+                } else if !store.useSample && store.camera.status == .ready {
+                    CameraPreview(controller: store.camera)
+                } else if store.useSample {
+                    targetGrid
+                    if let sample = store.sample {
+                        Image(sample.spriteName).resizable().interpolation(.none).scaledToFit()
+                            .frame(width: side * 0.68, height: side * 0.68)
+                            .accessibilityLabel(sample.name(in: store.language))
+                            .shadow(color: DexTheme.ink.opacity(0.2), radius: 0, x: 4, y: 6)
+                    }
+                } else {
+                    cameraStatus
+                }
+                ScanLines().allowsHitTesting(false)
+                VStack {
+                    HStack(spacing: 6) {
+                        Circle().fill(store.isScanning ? .orange : DexTheme.ink).frame(width: 5, height: 5)
+                        pixel(store.isScanning ? store.text("ANALYZING…", "分析中…") : store.useSample ? store.text("SAMPLE TARGET", "样本目标") : (store.capturedImage == nil ? store.text("LIVE VIEW", "实时取景") : store.text("PHOTO REVIEW", "照片回看")), 7)
+                        Spacer()
+                        Image(systemName: "battery.100percent").font(.system(size: 14))
+                    }
+                    Spacer()
+                    if store.isScanning { ProgressView().tint(DexTheme.ink).scaleEffect(1.4) }
+                    Spacer()
+                    HStack {
+                        pixel(store.useSample ? "#\(store.sample?.number ?? "025")" : "AF / 1×", 8)
+                        Spacer()
+                        pixel(store.text("OFFLINE", "离线"), 7)
+                    }
+                }.padding(14).foregroundStyle(DexTheme.ink)
+                Reticle().stroke(DexTheme.ink.opacity(0.6), lineWidth: 2).padding(42).allowsHitTesting(false)
+                if let message = store.message {
+                    VStack(spacing: 8) {
+                        Image(systemName: "viewfinder.trianglebadge.exclamationmark").font(.title2)
+                        Text(message).font(PixelFont.font(size: store.language == .en ? 8 : 14, language: store.language)).multilineTextAlignment(.center).lineSpacing(6)
+                        if !store.candidates.isEmpty {
+                            Text(store.text("Possible: ", "可能是：") + store.candidates.prefix(2).compactMap { candidate in PokemonCatalog.shared.pokemon(id: candidate.dexID)?.name(in: store.language) }.joined(separator: " / "))
+                                .font(.system(size: 11, design: .monospaced))
+                        }
+                    }.padding(15).frame(maxWidth: .infinity).foregroundStyle(DexTheme.cream)
+                        .background(DexTheme.charcoal.opacity(0.95)).clipShape(RoundedRectangle(cornerRadius: 6)).padding(18)
+                        .accessibilityIdentifier("scan-message")
+                }
+            }.frame(width: side, height: side).clipped().clipShape(RoundedRectangle(cornerRadius: 3))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("viewfinder")
+            VStack {
+                HStack { Screw(); Spacer(); Screw() }
+                Spacer()
+                HStack { Screw(); Spacer(); Screw() }
+            }.padding(4).allowsHitTesting(false)
+        }
+    }
+
+    private var targetGrid: some View {
+        Canvas { context, size in
+            for x in stride(from: 0.0, to: size.width, by: 20) {
+                for y in stride(from: 0.0, to: size.height, by: 20) {
+                    context.fill(Path(CGRect(x: x, y: y, width: 1, height: 1)), with: .color(DexTheme.ink.opacity(0.18)))
+                }
+            }
+            for inset in [40.0, 75.0] {
+                context.stroke(Path(ellipseIn: CGRect(x: inset, y: inset, width: size.width - inset * 2, height: size.height - inset * 2)), with: .color(DexTheme.ink.opacity(0.08)), lineWidth: 1)
+            }
+        }
+    }
+
+    private var cameraStatus: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "camera.aperture").font(.system(size: 42, weight: .ultraLight))
+            Text(store.camera.status == .denied ? store.text("Camera access is off", "相机权限未开启") : store.text("Camera unavailable", "相机暂不可用"))
+                .font(.system(size: 15, design: .monospaced))
+            if store.camera.status == .denied {
+                Button(store.text("Open Settings", "打开设置")) {
+                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                }.font(.system(size: 13, weight: .bold)).tint(DexTheme.ink)
+            } else {
+                Text(store.text("Import a photo or try a sample", "导入照片或体验样本"))
+                    .font(.system(size: 12, design: .monospaced))
+            }
+        }.foregroundStyle(DexTheme.ink).multilineTextAlignment(.center).padding(25)
+    }
+
+    private var footer: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 9) {
+                Button {
+                    DeviceAudio.shared.play(.button)
+                    if compact { store.showingCompactEntry = true } else { store.showingCatalog = true }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "book.closed.fill")
+                        pixel(compact ? store.text("OPEN RECORD", "打开记录") : store.text("POKÉDEX", "宝可梦图鉴"), 8)
+                    }
+                }.buttonStyle(.plain).accessibilityIdentifier("record-button")
+                pixel(store.text("\(store.seenIDs.count) SEEN · 151 SPECIES", "已发现 \(store.seenIDs.count) · 共151种"), 6)
+                    .foregroundStyle(.white.opacity(0.5))
+            }.foregroundStyle(DexTheme.cream)
+            Spacer()
+            SpeakerGrille()
+            Button { store.showingSettings = true; DeviceAudio.shared.play(.button) } label: {
+                Image(systemName: "gearshape.fill").font(.system(size: 18)).frame(width: 44, height: 44)
+            }.buttonStyle(.plain).foregroundStyle(.white.opacity(0.65))
+                .accessibilityLabel(store.text("Settings", "设置")).accessibilityIdentifier("settings-button")
+        }
+    }
+
+    private func pixel(_ text: String, _ size: CGFloat) -> some View {
+        Text(text).font(PixelFont.font(size: store.language == .zhHans ? size + 4 : size, language: store.language))
+    }
 }
+
+private struct Reticle: Shape {
+    func path(in r: CGRect) -> Path {
+        var path = Path()
+        let length: CGFloat = 16
+        for (x, y, dx, dy) in [(r.minX, r.minY, 1.0, 1.0), (r.maxX, r.minY, -1.0, 1.0), (r.minX, r.maxY, 1.0, -1.0), (r.maxX, r.maxY, -1.0, -1.0)] {
+            path.move(to: CGPoint(x: x, y: y + dy * length))
+            path.addLine(to: CGPoint(x: x, y: y))
+            path.addLine(to: CGPoint(x: x + dx * length, y: y))
+        }
+        return path
+    }
+}
+
+#Preview("Duo · closed", traits: .fixedLayout(width: 466, height: 678)) { ContentView() }
+
+#Preview("Duo · open", traits: .fixedLayout(width: 951, height: 669)) { ContentView() }

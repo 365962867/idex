@@ -1,0 +1,7 @@
+# Cached upstream inputs and generated verification output
+.catalog-cache/
+artifacts/
+DerivedData/
+*.xcresult
+__pycache__/
+.DS_Store

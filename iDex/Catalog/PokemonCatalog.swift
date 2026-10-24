@@ -1,0 +1,146 @@
+import Foundation
+import CoreText
+import SwiftUI
+
+/// Controls both interface copy and the voice used for Pokédex readings.
+enum AppLanguage: String, CaseIterable, Identifiable, Codable {
+    case en
+    case zhHans
+
+    var id: String { rawValue }
+    var title: String { self == .en ? "English" : "简体中文" }
+    var speechLocale: String { self == .en ? "en-US" : "zh-CN" }
+
+    static var systemDefault: AppLanguage {
+        Locale.preferredLanguages.first?.hasPrefix("zh") == true ? .zhHans : .en
+    }
+
+    func text(_ english: String, _ chinese: String) -> String {
+        self == .en ? english : chinese
+    }
+}
+
+struct PokemonStat: Codable, Hashable, Identifiable {
+    let name: String
+    let value: Int
+    var id: String { name }
+
+    func title(in language: AppLanguage) -> String {
+        switch name {
+        case "hp": return language.text("HP", "体力")
+        case "attack": return language.text("ATTACK", "攻击")
+        case "defense": return language.text("DEFENSE", "防御")
+        case "special-attack": return language.text("SP. ATK", "特攻")
+        case "special-defense": return language.text("SP. DEF", "特防")
+        case "speed": return language.text("SPEED", "速度")
+        default: return name.uppercased()
+        }
+    }
+}
+
+struct Pokemon: Identifiable, Codable, Hashable {
+    let id: Int
+    let englishName: String
+    let chineseName: String
+    /// Stable, English type identifiers, such as `grass` and `poison`.
+    let types: [String]
+    /// Height in metres.
+    let height: Double
+    /// Weight in kilograms.
+    let weight: Double
+    let englishDescription: String
+    let chineseDescription: String
+    let englishGenus: String
+    let chineseGenus: String
+    let stats: [PokemonStat]
+
+    var number: String { String(format: "%03d", id) }
+    var spriteName: String { "pokemon-\(number)" }
+    var totalStats: Int { stats.reduce(0) { $0 + $1.value } }
+
+    func name(in language: AppLanguage) -> String {
+        language.text(englishName, chineseName)
+    }
+
+    func description(in language: AppLanguage) -> String {
+        language.text(englishDescription, chineseDescription)
+    }
+
+    func genus(in language: AppLanguage) -> String {
+        language.text(englishGenus, chineseGenus)
+    }
+
+    func typeNames(in language: AppLanguage) -> [String] {
+        types.map { Self.typeName($0, in: language) }
+    }
+
+    static func typeName(_ type: String, in language: AppLanguage) -> String {
+        guard language == .zhHans else { return type.uppercased() }
+        return ["normal": "一般", "fighting": "格斗", "flying": "飞行", "poison": "毒",
+                "ground": "地面", "rock": "岩石", "bug": "虫", "ghost": "幽灵",
+                "steel": "钢", "fire": "火", "water": "水", "grass": "草",
+                "electric": "电", "psychic": "超能力", "ice": "冰", "dragon": "龙",
+                "dark": "恶", "fairy": "妖精"][type] ?? type
+    }
+
+    func spokenEntry(in language: AppLanguage) -> String {
+        if language == .zhHans {
+            return "\(chineseName)。全国图鉴编号\(id)。\(chineseGenus)。属性，\(typeNames(in: language).joined(separator: "，"))。\(chineseDescription)"
+        }
+        return "\(englishName). Pokédex number \(id). \(englishGenus). \(typeNames(in: language).joined(separator: " and ")) type. \(englishDescription)"
+    }
+}
+
+struct PokemonCatalog {
+    static let shared = PokemonCatalog()
+    let entries: [Pokemon]
+
+    private init(bundle: Bundle = .main) {
+        guard let url = bundle.url(forResource: "pokemon-kanto", withExtension: "json"),
+              let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode([Pokemon].self, from: data) else {
+            assertionFailure("The bundled Kanto catalog is missing or invalid.")
+            entries = []
+            return
+        }
+        entries = decoded.sorted { $0.id < $1.id }
+    }
+
+    func pokemon(id: Int) -> Pokemon? {
+        entries.first { $0.id == id }
+    }
+
+    func search(_ query: String, language: AppLanguage) -> [Pokemon] {
+        let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return entries }
+        let numberQuery = value.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+        return entries.filter {
+            $0.englishName.localizedCaseInsensitiveContains(value)
+                || $0.chineseName.contains(value)
+                || $0.number.contains(numberQuery)
+                || $0.typeNames(in: language).contains { $0.localizedCaseInsensitiveContains(value) }
+        }
+    }
+}
+
+/// Font registration stays entirely local; no network request is required at launch.
+enum PixelFont {
+    private static var didRegister = false
+    static let latinName = "PressStart2P-Regular"
+    // Determined from the upstream OTF's PostScript name.
+    static let chineseName = "Fusion-Pixel-12px-Prop-zh-Hans-Regular"
+
+    static func register() {
+        guard !didRegister else { return }
+        didRegister = true
+        for (name, ext) in [("PressStart2P-Regular", "ttf"), ("FusionPixel-12px-zh-Hans", "otf")] {
+            if let url = Bundle.main.url(forResource: name, withExtension: ext) {
+                CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+            }
+        }
+    }
+
+    static func font(size: CGFloat, language: AppLanguage = .en) -> Font {
+        .custom(language == .en ? latinName : chineseName, size: size)
+    }
+}

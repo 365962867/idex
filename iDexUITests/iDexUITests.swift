@@ -84,6 +84,42 @@ final class iDexUITests: XCTestCase {
         attachScreenshot("charizard-archive", app: app)
     }
 
+    func testTurningPhoneDoesNotRotateScannerOrRecord() throws {
+        XCUIDevice.shared.orientation = .portrait
+        defer { XCUIDevice.shared.orientation = .portrait }
+        let app = launchInEnglish()
+        let scanner = element("viewfinder", in: app)
+        XCTAssertTrue(scanner.waitForExistence(timeout: 10))
+        let scannerFrame = scanner.frame
+        let appFrame = app.frame
+
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portraitUpsideDown, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertEqual(app.frame.width, appFrame.width, accuracy: 1)
+            XCTAssertEqual(app.frame.height, appFrame.height, accuracy: 1)
+            XCTAssertEqual(scanner.frame.minX, scannerFrame.minX, accuracy: 1)
+            XCTAssertEqual(scanner.frame.minY, scannerFrame.minY, accuracy: 1)
+            XCTAssertEqual(scanner.frame.width, scannerFrame.width, accuracy: 1)
+            XCTAssertEqual(scanner.frame.height, scannerFrame.height, accuracy: 1)
+            XCTAssertFalse(app.buttons["catalog-button"].exists)
+        }
+        attachScreenshot("orientation-locked-cover", app: app)
+
+        app.buttons["record-button"].tap()
+        let name = app.staticTexts["pokemon-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        let recordFrame = name.frame
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertEqual(app.frame.width, appFrame.width, accuracy: 1)
+            XCTAssertEqual(app.frame.height, appFrame.height, accuracy: 1)
+            XCTAssertEqual(name.frame.minX, recordFrame.minX, accuracy: 1)
+            XCTAssertEqual(name.frame.minY, recordFrame.minY, accuracy: 1)
+            XCTAssertTrue(app.buttons["close-record"].isHittable)
+        }
+        attachScreenshot("orientation-locked-record", app: app)
+    }
+
     private func launchInEnglish() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-idex.language", "en", "-idex.soundEnabled", "NO"]

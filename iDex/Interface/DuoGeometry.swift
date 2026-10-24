@@ -15,30 +15,12 @@ struct DuoGeometry {
     }
 }
 
-/// Duo's cover and interior have different natural orientations. Keep the
-/// cover upright and the unfolded device in its book-like landscape posture.
-@MainActor final class DuoPosture {
-    static let shared = DuoPosture()
-    private(set) var orientationMask: UIInterfaceOrientationMask = .portrait
-    private var lastIsOpen: Bool?
-
-    func update(isOpen: Bool, scene: UIWindowScene?) {
-        let mask: UIInterfaceOrientationMask = isOpen ? .landscapeRight : .portrait
-        guard lastIsOpen != isOpen || scene?.effectiveGeometry.interfaceOrientation.isLandscape != isOpen else { return }
-        lastIsOpen = isOpen
-        orientationMask = mask
-        scene?.windows.first?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
-        scene?.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
-            // Geometry can be temporarily unavailable during a system presentation.
-            // The layout remains bounded and retries on the next hinge update.
-            _ = error
-        }
-    }
-}
-
+/// Lock to Duo's native holding orientation on both displays. UIKit maps this
+/// orientation to each display's native rotation; a wider interior canvas is
+/// not a reason to request a landscape rotation when the hinge changes.
 final class DexAppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        DuoPosture.shared.orientationMask
+        .portrait
     }
 }
 
@@ -48,7 +30,7 @@ struct HingeObserver: UIViewRepresentable {
         let view = UIView()
         view.isUserInteractionEnabled = false
         if #available(iOS 27.1, *) {
-            view.addInteraction(UIHingeInteraction { [weak view] _, update in
+            view.addInteraction(UIHingeInteraction { _, update in
                 let isOpen: Bool?
                 switch update.hinge?.status {
                 case .closed: isOpen = false
@@ -56,7 +38,6 @@ struct HingeObserver: UIViewRepresentable {
                 default: isOpen = nil
                 }
                 Task { @MainActor in
-                    if let isOpen { DuoPosture.shared.update(isOpen: isOpen, scene: view?.window?.windowScene) }
                     onUpdate(isOpen)
                 }
             })

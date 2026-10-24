@@ -13,7 +13,11 @@ Sprites were downloaded from the Pokémon Database's Black & White sprite archiv
 - https://img.pokemondb.net/sprites/black-white/normal/pikachu.png
 - Fallback source: https://github.com/PokeAPI/sprites
 
-Pokémon names, text, artwork and sprites are copyright and trademarks of Nintendo, Creatures Inc., and GAME FREAK inc. iDex is an unofficial fan project and is not endorsed by those companies. These assets require appropriate rights review before public commercial distribution.
+Cries for all 151 species come from [PokéAPI/cries](https://github.com/PokeAPI/cries) at commit `b3a9044bb839b5e3152aaa536c7b463a0fcf0140`, using `cries/pokemon/latest/{id}.ogg`. The upstream repository credits Pokémon Showdown, Veekun, and The Sounds Resource. `Resources/Cries/cry-sources.json` records each source URL, source and output SHA-256 hashes, species ID, and PCM frame count. The files are converted to mono 22,050 Hz, 16-bit PCM WAV without trimming or normalizing. Some upstream `.ogg` paths contain MP3 audio; conversion detects the actual format. Run `python3 scripts/audio/build_cries.py` with `ffmpeg` installed to regenerate them. The compiled app needs no decoder package or network access.
+
+The upstream license is preserved in `Resources/Cries/PokeAPI-Cries-LICENSE.txt`. It states that audio contents are copyright The Pokémon Company and that the repository is distributed under CC0 1.0; this does not transfer the underlying Pokémon audio rights.
+
+Pokémon names, text, artwork, sprites, and cries are copyright and trademarks of Nintendo, Creatures Inc., GAME FREAK inc., and The Pokémon Company. iDex is an unofficial fan project and is not endorsed by those companies. These assets require appropriate rights review before public commercial distribution.
 
 Two locally bundled pixel fonts support both interface languages:
 

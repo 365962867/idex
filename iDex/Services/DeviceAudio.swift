@@ -6,8 +6,8 @@ nonisolated enum DeviceSound: Hashable, Sendable, CaseIterable {
     case button, scan, success, error, open
 }
 
-/// Local PCM chimes and Apple's on-device speech synthesis. No sound files or
-/// network requests are needed. A selected system voice may need to be installed
+/// Local PCM chimes, bundled Pokémon cries, and Apple's on-device speech
+/// synthesis. No network requests are needed. A selected voice may need to be installed
 /// in iOS Settings before its first offline use.
 @MainActor @Observable
 final class DeviceAudio {
@@ -115,6 +115,33 @@ final class DeviceAudio {
                   !Task.isCancelled, self.isSoundEnabled,
                   generation == self.speechGeneration, self.isActive else { return }
             self.worker.speak(text, languageCode: languageCode, request: request)
+        }
+    }
+
+    /// Use the species' actual cry as confirmation, then read the entry only
+    /// after playback finishes. Result presentation never waits for audio.
+    func announce(_ pokemon: Pokemon, language: AppLanguage) {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        stopSound()
+        stopSpeaking()
+        guard isActive, isSoundEnabled else { return }
+        let generation = soundGeneration
+        let readingGeneration = speechGeneration
+        let request = AudioPlaybackRequest()
+        soundRequest = request
+        soundTask = Task { [weak self] in
+            guard let self, !Task.isCancelled else { return }
+            guard await self.ensureSession(), !Task.isCancelled,
+                  generation == self.soundGeneration, self.isActive, self.isSoundEnabled else { return }
+            self.worker.playCry(dexID: pokemon.id, request: request) { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self, !request.isCancelled,
+                          generation == self.soundGeneration,
+                          readingGeneration == self.speechGeneration,
+                          self.isActive, self.isSoundEnabled else { return }
+                    self.speak(pokemon.spokenEntry(in: language), languageCode: language.speechLocale)
+                }
+            }
         }
     }
 

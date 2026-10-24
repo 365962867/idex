@@ -6,6 +6,50 @@ import UIKit
 @MainActor
 @Suite("Nonblocking native audio", .serialized)
 struct AudioPlaybackTests {
+    @Test func cryRendersToCompletionBeforeItsReadingCallback() async throws {
+        await DeviceAudio.shared.suspend()?.value
+        defer { DeviceAudio.shared.resume() }
+        let worker = AudioPlaybackWorker(soundVolume: 0, speechVolume: 0)
+        #expect(await worker.activate())
+        let signalBefore = await worker.status().renderedSignalFrames
+        let finished = AudioPlaybackRequest()
+        worker.playCry(dexID: 25, request: AudioPlaybackRequest()) { finished.cancel() }
+        #expect(await worker.status().soundIsPlaying)
+        #expect(!finished.isCancelled)
+        for _ in 0..<300 {
+            if finished.isCancelled { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(finished.isCancelled)
+        let status = await worker.status()
+        #expect(!status.soundIsPlaying)
+        #expect(status.renderedSignalFrames > signalBefore)
+        #expect(!status.hasSpeechSynthesizer)
+        await worker.deactivate()
+    }
+
+    @Test func cancelledCryCannotPlayOrCompleteAndStoppedCryCannotNarrate() async throws {
+        await DeviceAudio.shared.suspend()?.value
+        defer { DeviceAudio.shared.resume() }
+        let worker = AudioPlaybackWorker(soundVolume: 0, speechVolume: 0)
+        let request = AudioPlaybackRequest()
+        let finished = AudioPlaybackRequest()
+        request.cancel()
+        worker.playCry(dexID: 25, request: request) { finished.cancel() }
+        #expect(await !worker.status().soundIsPlaying)
+        #expect(!finished.isCancelled)
+        #expect(await worker.activate())
+        let liveRequest = AudioPlaybackRequest()
+        worker.playCry(dexID: 25, request: liveRequest) { finished.cancel() }
+        #expect(await worker.status().soundIsPlaying)
+        liveRequest.cancel()
+        worker.stopSound()
+        #expect(await !worker.status().soundIsPlaying)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!finished.isCancelled)
+        await worker.deactivate()
+    }
+
     @Test func silentNativeSpeechReportsItsActualStartAndFinish() async throws {
         await DeviceAudio.shared.suspend()?.value
         defer { DeviceAudio.shared.resume() }

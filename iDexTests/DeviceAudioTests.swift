@@ -5,6 +5,96 @@ import Testing
 @MainActor
 @Suite("Audio startup and lifecycle", .serialized)
 struct DeviceAudioTests {
+    @Test(arguments: [1, 25, 151])
+    func confirmedScanPlaysTheMatchingCryBeforeNarration(dexID: Int) async throws {
+        let savedViewed = UserDefaults.standard.object(forKey: "idex.lastViewed")
+        let savedSeen = UserDefaults.standard.object(forKey: "idex.seen")
+        defer {
+            UserDefaults.standard.set(savedViewed, forKey: "idex.lastViewed")
+            UserDefaults.standard.set(savedSeen, forKey: "idex.seen")
+        }
+        let backend = AudioPlaybackSpy()
+        let audio = DeviceAudio(worker: backend, defaults: isolatedDefaults())
+        let store = DexStore(audio: audio)
+        audio.resume()
+        let candidate = RecognitionCandidate(dexID: dexID, name: "test", confidence: 0.9, logit: 8)
+        let result = RecognitionResult(candidates: [candidate], accepted: candidate, logitMargin: 4)
+        try store.applyRecognition(result)
+        #expect(store.identified)
+        #expect(await waitUntil { backend.cries == [dexID] })
+        #expect(backend.spokenCount == 0)
+        backend.finishCry()
+        #expect(await waitUntil { backend.spokenCount == 1 })
+        store.suspend()
+    }
+
+    @Test func uncertainScanDoesNotPlayACryOrNarrate() async throws {
+        let savedViewed = UserDefaults.standard.object(forKey: "idex.lastViewed")
+        defer { UserDefaults.standard.set(savedViewed, forKey: "idex.lastViewed") }
+        let backend = AudioPlaybackSpy()
+        let audio = DeviceAudio(worker: backend, defaults: isolatedDefaults())
+        let store = DexStore(audio: audio)
+        audio.resume()
+        let candidate = RecognitionCandidate(dexID: 25, name: "pikachu", confidence: 0.1, logit: 1)
+        try store.applyRecognition(RecognitionResult(candidates: [candidate], accepted: nil, logitMargin: 0))
+        #expect(await waitUntil { backend.played == [.button] })
+        #expect(backend.cries.isEmpty)
+        #expect(backend.spokenCount == 0)
+        store.suspend()
+    }
+
+    @Test(arguments: ["mute", "suspend", "rescan", "stopReading"])
+    func cancellingACryCannotStartDelayedNarration(action: String) async throws {
+        let backend = AudioPlaybackSpy()
+        let audio = DeviceAudio(worker: backend, defaults: isolatedDefaults())
+        audio.resume()
+        audio.announce(try #require(PokemonCatalog.shared.pokemon(id: 25)), language: .en)
+        #expect(await waitUntil { backend.cries == [25] })
+        switch action {
+        case "mute": audio.isSoundEnabled = false
+        case "suspend": audio.suspend()
+        case "rescan": audio.stopSpeaking(); audio.play(.scan)
+        default: audio.stopSpeaking()
+        }
+        backend.finishCry()
+        // Drain both the queued completion and a possible speech task.
+        for _ in 0..<10 { await Task.yield() }
+        #expect(backend.spokenCount == 0)
+        audio.suspend()
+    }
+
+    @Test func replacingACryIgnoresItsOldCompletion() async throws {
+        let backend = AudioPlaybackSpy()
+        let audio = DeviceAudio(worker: backend, defaults: isolatedDefaults())
+        audio.resume()
+        audio.announce(try #require(PokemonCatalog.shared.pokemon(id: 25)), language: .en)
+        #expect(await waitUntil { backend.cries == [25] })
+        audio.announce(try #require(PokemonCatalog.shared.pokemon(id: 6)), language: .zhHans)
+        #expect(await waitUntil { backend.cries == [25, 6] })
+        backend.finishCry(at: 0)
+        for _ in 0..<10 { await Task.yield() }
+        #expect(backend.spokenCount == 0)
+        backend.finishCry(at: 1)
+        #expect(await waitUntil { backend.spokenCount == 1 })
+        #expect(backend.latestSpeechText?.hasPrefix("喷火龙") == true)
+        #expect(backend.latestLanguageCode == "zh-CN")
+        audio.suspend()
+    }
+
+    @Test func mutingDuringStartupPreventsAPendingCry() async throws {
+        let backend = AudioPlaybackSpy(deferredActivation: true)
+        let audio = DeviceAudio(worker: backend, defaults: isolatedDefaults())
+        audio.resume()
+        #expect(await waitUntil { backend.activationCount == 1 })
+        audio.announce(try #require(PokemonCatalog.shared.pokemon(id: 25)), language: .en)
+        audio.isSoundEnabled = false
+        backend.completeActivation()
+        #expect(await waitUntil { backend.deactivationCount == 1 })
+        #expect(backend.cries.isEmpty)
+        #expect(backend.spokenCount == 0)
+        audio.suspend()
+    }
+
     @Test func speakingStateFollowsPlaybackAndIgnoresReplacedUtterances() async throws {
         let backend = AudioPlaybackSpy()
         let audio = DeviceAudio(worker: backend, defaults: isolatedDefaults())
@@ -149,6 +239,10 @@ nonisolated private final class AudioPlaybackSpy: DeviceAudioPlayback, @unchecke
     private var cues: [DeviceSound] = []
     private var speechCount = 0
     private var speechRequest: AudioPlaybackRequest?
+    private var cryIDs: [Int] = []
+    private var cryCompletions: [@Sendable () -> Void] = []
+    private var speechText: String?
+    private var languageCode: String?
     private var pending: [CheckedContinuation<Bool, Never>] = []
 
     init(deferredActivation: Bool = false) { self.deferredActivation = deferredActivation }
@@ -157,6 +251,22 @@ nonisolated private final class AudioPlaybackSpy: DeviceAudioPlayback, @unchecke
     var played: [DeviceSound] { lock.withLock { cues } }
     var spokenCount: Int { lock.withLock { speechCount } }
     var latestSpeechRequest: AudioPlaybackRequest? { lock.withLock { speechRequest } }
+    var cries: [Int] { lock.withLock { cryIDs } }
+    var latestSpeechText: String? { lock.withLock { speechText } }
+    var latestLanguageCode: String? { lock.withLock { languageCode } }
+
+    func playCry(dexID: Int, request: AudioPlaybackRequest, completion: @escaping @Sendable () -> Void) {
+        guard !request.isCancelled else { return }
+        lock.withLock {
+            cryIDs.append(dexID)
+            cryCompletions.append(completion)
+        }
+    }
+
+    func finishCry(at index: Int = 0) {
+        let completion = lock.withLock { cryCompletions[index] }
+        completion()
+    }
 
     func activate() async -> Bool {
         await withCheckedContinuation { continuation in
@@ -188,6 +298,8 @@ nonisolated private final class AudioPlaybackSpy: DeviceAudioPlayback, @unchecke
         lock.withLock {
             speechCount += 1
             speechRequest = request
+            speechText = text
+            self.languageCode = languageCode
         }
     }
     func stopSound() {}

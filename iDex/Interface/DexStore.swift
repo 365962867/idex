@@ -194,8 +194,7 @@ final class DexStore {
         message = nil
         seenIDs.insert(pokemon.id)
         UserDefaults.standard.set(seenIDs.sorted(), forKey: "idex.seen")
-        audio.play(.success)
-        speak()
+        audio.announce(pokemon, language: language)
     }
 
     func browse(_ pokemon: Pokemon) {

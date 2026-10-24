@@ -7,6 +7,7 @@ nonisolated protocol DeviceAudioPlayback: Sendable {
     func activate() async -> Bool
     func deactivate() async
     func play(_ cue: DeviceSound, request: AudioPlaybackRequest)
+    func playCry(dexID: Int, request: AudioPlaybackRequest, completion: @escaping @Sendable () -> Void)
     func stopSound()
     func speak(_ text: String, languageCode: String, request: AudioPlaybackRequest)
     func stopSpeaking()
@@ -64,7 +65,7 @@ nonisolated final class SpeechPlaybackObserver: NSObject, AVSpeechSynthesizerDel
     }
 }
 
-/// One live output engine serves every chime. A foreground warmup starts the
+/// One live output engine serves every chime and bundled Pokémon cry. A foreground warmup starts the
 /// actual hardware, so the first short cue doesn't depend on speech priming it.
 /// Native setup and speech calls stay off the UI and cooperative executors.
 nonisolated final class AudioPlaybackWorker: DeviceAudioPlayback, @unchecked Sendable {
@@ -204,23 +205,62 @@ nonisolated final class AudioPlaybackWorker: DeviceAudioPlayback, @unchecked Sen
             do {
                 try self.startEngine()
                 guard !request.isCancelled, let player = self.player, let buffer = self.buffers[cue] else { return }
-                player.stop() // Discard the previous cue; keep the engine running.
-                self.currentRequest = request
-                self.currentCue = cue
-                player.scheduleBuffer(buffer, atTime: nil, options: cue == .scan ? .loops : [], completionCallbackType: .dataPlayedBack) { [weak worker = self] in
-                    guard let worker else { return }
-                    worker.queue.async {
-                        if worker.currentRequest === request {
-                            worker.currentRequest = nil
-                            worker.currentCue = nil
-                        }
-                    }
-                }
-                try player.playAudio()
+                try self.schedule(buffer, on: player, cue: cue, request: request)
             } catch {
                 Self.logger.error("Chime playback failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    func playCry(dexID: Int, request: AudioPlaybackRequest, completion: @escaping @Sendable () -> Void) {
+        queue.async {
+            guard !request.isCancelled else { return }
+            do {
+                try self.startEngine()
+                guard let player = self.player else { throw PlaybackError.invalidFormat }
+                let buffer = try Self.cryBuffer(dexID: dexID)
+                guard !request.isCancelled else { return }
+                try self.schedule(buffer, on: player, request: request, completion: completion)
+            } catch {
+                Self.logger.error("Cry playback failed for dex \(dexID): \(error.localizedDescription, privacy: .public)")
+                // A missing or unreadable asset must not prevent the entry reading.
+                if !request.isCancelled { completion() }
+            }
+        }
+    }
+
+    /// Files are already mono 22,050 Hz PCM. Decode on the audio queue and retain
+    /// only the scheduled buffer, without loading the whole catalog into memory.
+    static func cryBuffer(dexID: Int, bundle: Bundle = .main) throws -> AVAudioPCMBuffer {
+        guard let url = bundle.url(forResource: String(format: "pokemon-cry-%03d", dexID), withExtension: "wav") else {
+            throw PlaybackError.missingCry
+        }
+        let file = try AVAudioFile(forReading: url)
+        guard file.processingFormat.sampleRate == DeviceSoundWave.sampleRate,
+              file.processingFormat.channelCount == 1,
+              file.length > 0,
+              let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length)) else {
+            throw PlaybackError.invalidFormat
+        }
+        try file.read(into: buffer)
+        return buffer
+    }
+
+    private func schedule(_ buffer: AVAudioPCMBuffer, on player: AVAudioPlayerNode, cue: DeviceSound? = nil,
+                          request: AudioPlaybackRequest, completion: (@Sendable () -> Void)? = nil) throws {
+        player.stop() // Discard previous audio; keep the engine running.
+        currentRequest = request
+        currentCue = cue
+        player.scheduleBuffer(buffer, atTime: nil, options: cue == .scan ? .loops : [], completionCallbackType: .dataPlayedBack) { [weak self] in
+            guard let self else { return }
+            self.queue.async {
+                guard self.currentRequest === request else { return }
+                self.currentRequest = nil
+                self.currentCue = nil
+                if !request.isCancelled { completion?() }
+            }
+        }
+        try player.playAudio()
     }
 
     func stopSound() {
@@ -273,7 +313,7 @@ nonisolated final class AudioPlaybackWorker: DeviceAudioPlayback, @unchecked Sen
                 continuation.resume(returning: Status(
                     cachedSoundCount: self.buffers.count,
                     hasSpeechSynthesizer: self.synthesizer != nil,
-                    soundIsPlaying: self.currentCue != nil && (self.player?.isPlaying ?? false),
+                    soundIsPlaying: self.currentRequest != nil && (self.player?.isPlaying ?? false),
                     speechIsSpeaking: self.synthesizer?.isSpeaking ?? false,
                     renderedFrames: progress.frames,
                     renderedSignalFrames: progress.signalFrames,
@@ -285,7 +325,7 @@ nonisolated final class AudioPlaybackWorker: DeviceAudioPlayback, @unchecked Sen
         }
     }
 
-    private enum PlaybackError: Error { case invalidFormat }
+    private enum PlaybackError: Error { case invalidFormat, missingCry }
 
     nonisolated struct Status: Sendable {
         let cachedSoundCount: Int
@@ -301,7 +341,7 @@ nonisolated final class AudioPlaybackWorker: DeviceAudioPlayback, @unchecked Sen
 }
 
 /// A small tap on the chime mixer confirms hardware output is running. This
-/// observes only app-generated tones; it never records microphone input.
+/// observes only app playback; it never records microphone input.
 nonisolated private final class AudioRenderProgress: @unchecked Sendable {
     private let lock = NSLock()
     private var frames = 0

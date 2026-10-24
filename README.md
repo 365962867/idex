@@ -28,7 +28,7 @@ The app target uses Swift `-O` optimization with whole-module compilation and C/
 
 Photo preparation runs outside the main actor and requests a thumbnail of approximately four megapixels or less before making the centered, upright 1200px square. Camera capture prefers native YUV frames, converting only the retained scan frame to RGB. Static texture drawing batches dots and lines, while catalog searches reuse prepared numbers and bilingual types. See [performance measurements and reproduction](docs/performance.md).
 
-Audio session configuration, player preparation, waveform generation, and speech setup run on a dedicated serial queue. Chime players and voices are reused, and stopping a scan does not initialize an unused speech service. Audio never holds up capture or the completed result. Mute, backgrounding, and newer requests cancel pending playback even while native audio setup is in progress.
+Confirmed scans play the matched Pokémon's cry, then narrate its entry after the cry finishes. All 151 species have a bundled cry; low-confidence matches do not automatically play one or narrate. Cry playback follows the existing sound toggle. Audio session configuration, player preparation, waveform generation, cry decoding, and speech setup run on a dedicated serial queue. The audio player and voices are reused, and stopping a scan does not initialize an unused speech service. Audio never holds up capture or the completed result. Mute, backgrounding, and newer requests cancel pending playback even while native audio setup is in progress.
 
 ## Tests and visual checks
 
@@ -55,6 +55,7 @@ xcrun simctl io booted screenshot --display=1 /tmp/idex-cover.png
 
 - [Pokémon Database sprites](https://pokemondb.net/sprites): all 151 Black/White pixel sprites bundled offline.
 - [PokéAPI](https://github.com/PokeAPI/pokeapi): species names, bilingual flavor text, dimensions, types, and stats.
+- [PokéAPI cries](https://github.com/PokeAPI/cries): all 151 species' latest cries, pinned and converted to mono PCM WAV for offline playback. Regenerate with `python3 scripts/audio/build_cries.py` (development requires `ffmpeg`).
 - Press Start 2P and Fusion Pixel: bundled Latin and Simplified Chinese pixel fonts under SIL OFL 1.1, with license files.
 - [BiernyVR's classifier](https://huggingface.co/BiernyVR/pokemon-classifier-mobilenetv3): pinned DenseNet121 checkpoint, with upstream MIT metadata and documented conversion.
 - Physical-device inspiration: [Stuff's DIY Pokédex article](https://stuff.co.za/2026/04/15/the-pokedex-is-real-and-fully-functional-but-youd-have-to-build-your-own/) and [Pokebattler's Pokédex reference](https://articles.pokebattler.com/2018/08/30/pogo-pokedex-by-the-numbers/).

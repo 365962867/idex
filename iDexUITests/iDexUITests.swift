@@ -55,7 +55,7 @@ final class iDexUITests: XCTestCase {
         openCatalog(in: app)
         let search = app.searchFields.firstMatch
         if !search.exists {
-            // iOS 27 presents .searchable as a bottom search button until used.
+            // iOS 27 can present .searchable as a bottom search button until used.
             let revealSearch = app.buttons["Search"]
             XCTAssertTrue(revealSearch.waitForExistence(timeout: 5))
             revealSearch.tap()
@@ -84,7 +84,7 @@ final class iDexUITests: XCTestCase {
         attachScreenshot("charizard-archive", app: app)
     }
 
-    func testTurningPhoneDoesNotRotateScannerOrRecord() throws {
+    func testTurningPhoneDoesNotRotateScannerOrPresentations() throws {
         XCUIDevice.shared.orientation = .portrait
         defer { XCUIDevice.shared.orientation = .portrait }
         let app = launchInEnglish()
@@ -92,6 +92,7 @@ final class iDexUITests: XCTestCase {
         XCTAssertTrue(scanner.waitForExistence(timeout: 10))
         let scannerFrame = scanner.frame
         let appFrame = app.frame
+        let expanded = app.buttons["catalog-button"].exists
 
         for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portraitUpsideDown, .portrait] {
             XCUIDevice.shared.orientation = orientation
@@ -101,11 +102,11 @@ final class iDexUITests: XCTestCase {
             XCTAssertEqual(scanner.frame.minY, scannerFrame.minY, accuracy: 1)
             XCTAssertEqual(scanner.frame.width, scannerFrame.width, accuracy: 1)
             XCTAssertEqual(scanner.frame.height, scannerFrame.height, accuracy: 1)
-            XCTAssertFalse(app.buttons["catalog-button"].exists)
+            XCTAssertEqual(app.buttons["catalog-button"].exists, expanded)
         }
-        attachScreenshot("orientation-locked-cover", app: app)
+        attachScreenshot(expanded ? "orientation-locked-expanded" : "orientation-locked-cover", app: app)
 
-        app.buttons["record-button"].tap()
+        if !expanded { app.buttons["record-button"].tap() }
         let name = app.staticTexts["pokemon-name"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         let recordFrame = name.frame
@@ -115,9 +116,55 @@ final class iDexUITests: XCTestCase {
             XCTAssertEqual(app.frame.height, appFrame.height, accuracy: 1)
             XCTAssertEqual(name.frame.minX, recordFrame.minX, accuracy: 1)
             XCTAssertEqual(name.frame.minY, recordFrame.minY, accuracy: 1)
-            XCTAssertTrue(app.buttons["close-record"].isHittable)
+            if !expanded { XCTAssertTrue(app.buttons["close-record"].isHittable) }
         }
         attachScreenshot("orientation-locked-record", app: app)
+
+        openCatalog(in: app)
+        assertPresentationDoesNotRotate("Kanto archive", app: app, appFrame: appFrame)
+        app.buttons["settings-done"].tap()
+        if !expanded { app.buttons["close-record"].tap() }
+
+        app.buttons["settings-button"].tap()
+        assertPresentationDoesNotRotate("Device settings", app: app, appFrame: appFrame)
+        app.buttons["settings-done"].tap()
+    }
+
+    func testLaunchingWhileTurnedKeepsTheNativeLayout() throws {
+        defer { XCUIDevice.shared.orientation = .portrait }
+        XCUIDevice.shared.orientation = .portrait
+        let app = launchInEnglish()
+        let nativeFrame = app.frame
+        app.terminate()
+
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portraitUpsideDown] {
+            XCUIDevice.shared.orientation = orientation
+            app.launch()
+            XCTAssertTrue(app.buttons["settings-button"].waitForExistence(timeout: 10))
+            XCTAssertEqual(app.frame.width, nativeFrame.width, accuracy: 1)
+            XCTAssertEqual(app.frame.height, nativeFrame.height, accuracy: 1)
+            app.terminate()
+        }
+    }
+
+    private func assertPresentationDoesNotRotate(_ title: String, app: XCUIApplication, appFrame: CGRect) {
+        let navigationBar = app.navigationBars[title]
+        XCTAssertTrue(navigationBar.waitForExistence(timeout: 5))
+        let frame = navigationBar.frame
+        for orientation in [UIDeviceOrientation.landscapeLeft, .landscapeRight, .portraitUpsideDown, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            XCTAssertEqual(app.frame.width, appFrame.width, accuracy: 1)
+            XCTAssertEqual(app.frame.height, appFrame.height, accuracy: 1)
+            XCTAssertEqual(navigationBar.frame.minX, frame.minX, accuracy: 1)
+            XCTAssertEqual(navigationBar.frame.minY, frame.minY, accuracy: 1)
+            XCTAssertEqual(navigationBar.frame.width, frame.width, accuracy: 1)
+            XCTAssertEqual(navigationBar.frame.height, frame.height, accuracy: 1)
+            XCTAssertTrue(app.buttons["settings-done"].isHittable)
+        }
+        // Capture the idle presentation so persistent system-overlay behavior
+        // can be inspected separately from the preceding interactions.
+        Thread.sleep(forTimeInterval: 3.5)
+        attachScreenshot("orientation-locked-\(title)", app: app)
     }
 
     private func launchInEnglish() -> XCUIApplication {

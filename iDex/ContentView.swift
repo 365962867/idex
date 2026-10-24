@@ -2,10 +2,9 @@ import SwiftUI
 import PhotosUI
 
 struct ContentView: View {
-    @State private var store = DexStore()
+    @State var store = DexStore()
     @State private var photo: PhotosPickerItem?
     @State private var hingeIsOpen: Bool?
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         GeometryReader { proxy in
@@ -43,29 +42,29 @@ struct ContentView: View {
         .preferredColorScheme(.dark)
         .environment(\.locale, Locale(identifier: store.language == .en ? "en" : "zh-Hans"))
         .statusBarHidden()
+        .persistentSystemOverlays(.hidden)
         .task { store.resume() }
-        .sheet(isPresented: Binding(get: { store.showingCatalog && !store.showingCompactEntry }, set: { store.showingCatalog = $0 })) { CatalogSheet(store: store) }
-        .sheet(isPresented: $store.showingSettings) { SettingsSheet(store: store) }
-        .fullScreenCover(isPresented: $store.showingCompactEntry) {
-            EntryPanel(store: store).background { ShellSurface() }.ignoresSafeArea().statusBarHidden()
-                .overlay(alignment: .topTrailing) {
-                    Button { store.showingCompactEntry = false } label: {
-                        Image(systemName: "xmark.circle.fill").font(.title2).padding(20)
-                    }.tint(DexTheme.cream).accessibilityLabel(store.text("Close record", "关闭记录")).accessibilityIdentifier("close-record")
-                }
-                .sheet(isPresented: $store.showingCatalog) { CatalogSheet(store: store) }
-        }
         .onChange(of: photo) { _, item in
             guard let item else { return }
             Task { await store.importPhoto(item); photo = nil }
         }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active {
-                store.suspend()
-            } else {
-                store.resume()
+    }
+}
+
+struct CompactRecordView: View {
+    @Bindable var store: DexStore
+
+    var body: some View {
+        EntryPanel(store: store).background { ShellSurface() }.ignoresSafeArea()
+            .environment(\.locale, Locale(identifier: store.language == .en ? "en" : "zh-Hans"))
+            .preferredColorScheme(.dark)
+            .statusBarHidden()
+            .persistentSystemOverlays(.hidden)
+            .overlay(alignment: .topTrailing) {
+                Button { store.showingCompactEntry = false } label: {
+                    Image(systemName: "xmark.circle.fill").font(.title2).padding(20)
+                }.tint(DexTheme.cream).accessibilityLabel(store.text("Close record", "关闭记录")).accessibilityIdentifier("close-record")
             }
-        }
     }
 }
 

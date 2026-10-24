@@ -15,15 +15,6 @@ struct DuoGeometry {
     }
 }
 
-/// Lock to Duo's native holding orientation on both displays. UIKit maps this
-/// orientation to each display's native rotation; a wider interior canvas is
-/// not a reason to request a landscape rotation when the hinge changes.
-final class DexAppDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
-        .portrait
-    }
-}
-
 struct HingeObserver: UIViewRepresentable {
     var onUpdate: (Bool?) -> Void
     func makeUIView(context: Context) -> UIView {

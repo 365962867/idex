@@ -4,6 +4,7 @@ import Foundation
 @testable import iDex
 
 @MainActor
+@Suite(.serialized)
 struct iDexTests {
     @Test func openingDuoAddsOnlyLeadingSpace() {
         let folded = DuoGeometry(size: CGSize(width: 466, height: 678))
@@ -25,8 +26,12 @@ struct iDexTests {
     }
 
     @Test func appDeclaresOnlyTheNativeDuoOrientation() throws {
-        let delegate = DexAppDelegate()
-        #expect(delegate.application(.shared, supportedInterfaceOrientationsFor: nil) == .portrait)
+        let controller = DexHostingController(rootView: ContentView())
+        #expect(controller.prefersInterfaceOrientationLocked)
+        #expect(controller.supportedInterfaceOrientations == .portrait)
+        #expect(controller.preferredInterfaceOrientationForPresentation == .portrait)
+        #expect(controller.prefersStatusBarHidden)
+        #expect(controller.prefersHomeIndicatorAutoHidden)
 
         // Bundle's keyed lookup resolves device-qualified values. Read the
         // packaged plist itself to check every launch-time declaration.
@@ -35,6 +40,41 @@ struct iDexTests {
         for key in ["UISupportedInterfaceOrientations", "UISupportedInterfaceOrientations~iphone", "UISupportedInterfaceOrientations~ipad"] {
             let orientations = try #require(info[key] as? [String], "Missing orientation declaration: \(key)")
             #expect(orientations == ["UIInterfaceOrientationPortrait"], "Unexpected orientation support in \(key)")
+        }
+    }
+
+    @Test func connectedSceneUsesTheExplicitOrientationLock() throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let delegate = try #require(scene.delegate as? DexSceneDelegate)
+        #expect(delegate.supportedInterfaceOrientations(for: scene) == .portrait)
+        #expect(delegate.window?.rootViewController is DexHostingController)
+        #expect(scene.effectiveGeometry.isInterfaceOrientationLocked)
+    }
+
+    @Test func presentationsKeepTheSceneOrientationLocked() async throws {
+        let soundWasEnabled = DeviceAudio.shared.isSoundEnabled
+        DeviceAudio.shared.isSoundEnabled = false
+        defer { DeviceAudio.shared.isSoundEnabled = soundWasEnabled }
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let delegate = try #require(scene.delegate as? DexSceneDelegate)
+        let root = try #require(delegate.window?.rootViewController)
+        for keyPath in [\DexStore.showingCompactEntry, \.showingCatalog, \.showingSettings] {
+            delegate.store[keyPath: keyPath] = true
+            defer { delegate.store[keyPath: keyPath] = false }
+            for _ in 0..<50 {
+                if let presented = root.presentedViewController, presented.viewIfLoaded?.window != nil, presented.transitionCoordinator == nil { break }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            #expect(root.presentedViewController != nil)
+            #expect(scene.effectiveGeometry.isInterfaceOrientationLocked)
+            #expect(root.presentedViewController?.childForHomeIndicatorAutoHidden == nil)
+            #expect(root.presentedViewController?.prefersHomeIndicatorAutoHidden == true)
+            delegate.store[keyPath: keyPath] = false
+            for _ in 0..<50 {
+                if root.presentedViewController == nil { break }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            #expect(root.presentedViewController == nil)
         }
     }
 

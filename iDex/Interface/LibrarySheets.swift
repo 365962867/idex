@@ -4,7 +4,6 @@ struct CatalogSheet: View {
     @Bindable var store: DexStore
     @State private var query = ""
     @State private var seenOnly = false
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -16,7 +15,6 @@ struct CatalogSheet: View {
                         ForEach(results) { pokemon in
                             Button {
                                 store.browse(pokemon)
-                                dismiss()
                             } label: {
                                 VStack(spacing: 8) {
                                     HStack {
@@ -42,8 +40,11 @@ struct CatalogSheet: View {
             .navigationTitle(store.text("Kanto archive", "关都图鉴"))
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: store.text("Name, number or type", "名称、编号或属性"))
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(store.text("Done", "完成")) { dismiss() }.accessibilityIdentifier("settings-done") } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(store.text("Done", "完成")) { store.showingCatalog = false }.accessibilityIdentifier("settings-done") } }
         }.preferredColorScheme(.dark)
+            .environment(\.locale, Locale(identifier: store.language == .en ? "en" : "zh-Hans"))
+            .statusBarHidden()
+            .persistentSystemOverlays(.hidden)
     }
 
     private var results: [Pokemon] {
@@ -54,7 +55,6 @@ struct CatalogSheet: View {
 struct SettingsSheet: View {
     @Bindable var store: DexStore
     @Bindable private var audio = DeviceAudio.shared
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
@@ -96,7 +96,10 @@ struct SettingsSheet: View {
                 }
             }.navigationTitle(store.text("Device settings", "设备设置"))
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(store.text("Done", "完成")) { dismiss() }.accessibilityIdentifier("settings-done") } }
+                .toolbar { ToolbarItem(placement: .confirmationAction) { Button(store.text("Done", "完成")) { store.showingSettings = false }.accessibilityIdentifier("settings-done") } }
         }.preferredColorScheme(.dark)
+            .environment(\.locale, Locale(identifier: store.language == .en ? "en" : "zh-Hans"))
+            .statusBarHidden()
+            .persistentSystemOverlays(.hidden)
     }
 }

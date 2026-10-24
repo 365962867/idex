@@ -5,6 +5,55 @@ import Testing
 @MainActor
 @Suite("Audio startup and lifecycle", .serialized)
 struct DeviceAudioTests {
+    @Test func speakingStateFollowsPlaybackAndIgnoresReplacedUtterances() async throws {
+        let backend = AudioPlaybackSpy()
+        let audio = DeviceAudio(worker: backend, defaults: isolatedDefaults())
+        audio.resume()
+        audio.speak("Pikachu", languageCode: "en-US")
+        #expect(await waitUntil { backend.spokenCount == 1 })
+        let first = try #require(backend.latestSpeechRequest)
+        // Queuing speech and its pre-utterance delay must leave the bulb off.
+        #expect(!audio.isSpeaking)
+        first.reportSpeechActivity(true)
+        #expect(await waitUntil { audio.isSpeaking })
+        first.reportSpeechActivity(false)
+        #expect(await waitUntil { !audio.isSpeaking })
+
+        audio.speak("Bulbasaur", languageCode: "en-US")
+        #expect(await waitUntil { backend.spokenCount == 2 })
+        let second = try #require(backend.latestSpeechRequest)
+        second.reportSpeechActivity(true)
+        #expect(await waitUntil { audio.isSpeaking })
+        first.reportSpeechActivity(false)
+        await Task.yield()
+        #expect(audio.isSpeaking)
+        // Also reject an already queued callback after an explicit stop.
+        second.reportSpeechActivity(true)
+        audio.stopSpeaking()
+        await Task.yield()
+        #expect(!audio.isSpeaking)
+        audio.suspend()
+    }
+
+    @Test(arguments: [true, false])
+    func mutingOrSuspendingExtinguishesSpeechImmediately(mute: Bool) async throws {
+        let backend = AudioPlaybackSpy()
+        let audio = DeviceAudio(worker: backend, defaults: isolatedDefaults())
+        audio.resume()
+        audio.speak("Pikachu", languageCode: "en-US")
+        #expect(await waitUntil { backend.spokenCount == 1 })
+        let request = try #require(backend.latestSpeechRequest)
+        request.reportSpeechActivity(true)
+        #expect(await waitUntil { audio.isSpeaking })
+        if mute { audio.isSoundEnabled = false }
+        else { audio.suspend() }
+        #expect(!audio.isSpeaking)
+        request.reportSpeechActivity(true)
+        await Task.yield()
+        #expect(!audio.isSpeaking)
+        audio.suspend()
+    }
+
     @Test func becomingActivePreparesSoundBeforeTheFirstScanOrSpeech() async {
         let backend = AudioPlaybackSpy()
         let defaults = isolatedDefaults()
@@ -99,6 +148,7 @@ nonisolated private final class AudioPlaybackSpy: DeviceAudioPlayback, @unchecke
     private var deactivations = 0
     private var cues: [DeviceSound] = []
     private var speechCount = 0
+    private var speechRequest: AudioPlaybackRequest?
     private var pending: [CheckedContinuation<Bool, Never>] = []
 
     init(deferredActivation: Bool = false) { self.deferredActivation = deferredActivation }
@@ -106,6 +156,7 @@ nonisolated private final class AudioPlaybackSpy: DeviceAudioPlayback, @unchecke
     var deactivationCount: Int { lock.withLock { deactivations } }
     var played: [DeviceSound] { lock.withLock { cues } }
     var spokenCount: Int { lock.withLock { speechCount } }
+    var latestSpeechRequest: AudioPlaybackRequest? { lock.withLock { speechRequest } }
 
     func activate() async -> Bool {
         await withCheckedContinuation { continuation in
@@ -134,7 +185,10 @@ nonisolated private final class AudioPlaybackSpy: DeviceAudioPlayback, @unchecke
     }
     func speak(_ text: String, languageCode: String, request: AudioPlaybackRequest) {
         guard !request.isCancelled else { return }
-        lock.withLock { speechCount += 1 }
+        lock.withLock {
+            speechCount += 1
+            speechRequest = request
+        }
     }
     func stopSound() {}
     func stopSpeaking() {}

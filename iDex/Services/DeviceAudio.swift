@@ -13,6 +13,8 @@ nonisolated enum DeviceSound: Hashable, Sendable, CaseIterable {
 final class DeviceAudio {
     static let shared = DeviceAudio()
 
+    private(set) var isSpeaking = false
+
     var isSoundEnabled: Bool {
         didSet {
             defaults.set(isSoundEnabled, forKey: "idex.soundEnabled")
@@ -99,7 +101,13 @@ final class DeviceAudio {
         guard isActive, isSoundEnabled, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         stopSpeaking()
         let generation = speechGeneration
-        let request = AudioPlaybackRequest()
+        let request = AudioPlaybackRequest { [weak self] speaking in
+            Task { @MainActor [weak self] in
+                guard let self, generation == self.speechGeneration,
+                      self.isActive, self.isSoundEnabled else { return }
+                self.isSpeaking = speaking
+            }
+        }
         speechRequest = request
         speechTask = Task { [weak self] in
             guard let self, !Task.isCancelled else { return }
@@ -112,6 +120,7 @@ final class DeviceAudio {
 
     func stopSpeaking() {
         speechGeneration += 1
+        isSpeaking = false
         speechTask?.cancel()
         speechTask = nil
         speechRequest?.cancel()

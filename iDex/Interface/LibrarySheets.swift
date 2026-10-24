@@ -55,16 +55,15 @@ struct CatalogSheet: View {
 
 struct SettingsSheet: View {
     @Bindable var store: DexStore
-    @Bindable private var audio = DeviceAudio.shared
-
     var body: some View {
+        @Bindable var audio = store.audio
         NavigationStack {
             Form {
                 Section(store.text("Language / 语言", "语言 / Language")) {
                     ForEach(AppLanguage.allCases) { language in
                         Button {
                             store.language = language
-                            DeviceAudio.shared.play(.button)
+                            store.audio.play(.button)
                         } label: {
                             HStack {
                                 Text(language.title).foregroundStyle(.primary)

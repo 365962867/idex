@@ -6,6 +6,30 @@ import UIKit
 @MainActor
 @Suite("Nonblocking native audio", .serialized)
 struct AudioPlaybackTests {
+    @Test func silentNativeSpeechReportsItsActualStartAndFinish() async throws {
+        await DeviceAudio.shared.suspend()?.value
+        defer { DeviceAudio.shared.resume() }
+        let worker = AudioPlaybackWorker(soundVolume: 0, speechVolume: 0)
+        let defaults = UserDefaults(suiteName: "idex-speech-light-\(UUID())")!
+        defaults.setVolatileDomain(["idex.soundEnabled": true], forName: UserDefaults.registrationDomain)
+        let audio = DeviceAudio(worker: worker, defaults: defaults)
+        audio.resume()
+        #expect(await audio.prepare())
+        audio.speak("Pikachu.", languageCode: "en-US")
+        #expect(!audio.isSpeaking)
+        for _ in 0..<400 {
+            if audio.isSpeaking { break }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        #expect(audio.isSpeaking)
+        for _ in 0..<400 {
+            if !audio.isSpeaking { break }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        #expect(!audio.isSpeaking)
+        await audio.suspend()?.value
+    }
+
     @Test func stoppingUnusedAudioDoesNotInitializeSpeech() async {
         let worker = AudioPlaybackWorker(soundVolume: 0, speechVolume: 0)
         worker.stopSound()

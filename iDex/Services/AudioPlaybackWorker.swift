@@ -17,9 +17,51 @@ nonisolated protocol DeviceAudioPlayback: Sendable {
 nonisolated final class AudioPlaybackRequest: @unchecked Sendable {
     private let lock = NSLock()
     private var cancelled = false
+    private let speechActivity: (@Sendable (Bool) -> Void)?
+
+    init(speechActivity: (@Sendable (Bool) -> Void)? = nil) {
+        self.speechActivity = speechActivity
+    }
 
     var isCancelled: Bool { lock.withLock { cancelled } }
     func cancel() { lock.withLock { cancelled = true } }
+
+    func reportSpeechActivity(_ speaking: Bool) {
+        guard !isCancelled else { return }
+        speechActivity?(speaking)
+    }
+}
+
+/// Each delegate belongs to one utterance, so a replaced utterance's delayed
+/// cancellation cannot extinguish the next reading's light.
+nonisolated final class SpeechPlaybackObserver: NSObject, AVSpeechSynthesizerDelegate {
+    private let utteranceID: ObjectIdentifier
+    private let request: AudioPlaybackRequest
+
+    init(utterance: AVSpeechUtterance, request: AudioPlaybackRequest) {
+        utteranceID = ObjectIdentifier(utterance)
+        self.request = request
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        if ObjectIdentifier(utterance) == utteranceID { request.reportSpeechActivity(true) }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        if ObjectIdentifier(utterance) == utteranceID { request.reportSpeechActivity(false) }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        if ObjectIdentifier(utterance) == utteranceID { request.reportSpeechActivity(false) }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didPause utterance: AVSpeechUtterance) {
+        if ObjectIdentifier(utterance) == utteranceID { request.reportSpeechActivity(false) }
+    }
+
+    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
+        if ObjectIdentifier(utterance) == utteranceID { request.reportSpeechActivity(true) }
+    }
 }
 
 /// One live output engine serves every chime. A foreground warmup starts the
@@ -37,6 +79,7 @@ nonisolated final class AudioPlaybackWorker: DeviceAudioPlayback, @unchecked Sen
     private var currentRequest: AudioPlaybackRequest?
     private var currentCue: DeviceSound?
     private var synthesizer: AVSpeechSynthesizer?
+    private var speechObserver: SpeechPlaybackObserver?
     private var voices: [String: AVSpeechSynthesisVoice] = [:]
 
     init(soundVolume: Float = 0.32, speechVolume: Float = 0.9) {
@@ -211,6 +254,9 @@ nonisolated final class AudioPlaybackWorker: DeviceAudioPlayback, @unchecked Sen
             utterance.volume = self.speechVolume
             utterance.preUtteranceDelay = 0.28
             guard !request.isCancelled else { return }
+            let observer = SpeechPlaybackObserver(utterance: utterance, request: request)
+            self.speechObserver = observer
+            synthesizer.delegate = observer
             synthesizer.speak(utterance)
         }
     }

@@ -49,24 +49,71 @@ struct Screw: View {
 struct Indicator: View {
     var color: Color
     var size: CGFloat = 10
+    var isLit = true
     var body: some View {
-        Circle().fill(RadialGradient(colors: [.white.opacity(0.95), color, color.opacity(0.45)], center: .init(x: 0.32, y: 0.25), startRadius: 0, endRadius: size * 0.8))
+        Circle().fill(RadialGradient(colors: isLit
+            ? [.white.opacity(0.95), color, color.opacity(0.45)]
+            : [color.opacity(0.35), color.opacity(0.18), .black.opacity(0.65)],
+            center: .init(x: 0.32, y: 0.25), startRadius: 0, endRadius: size * 0.8))
             .overlay { Circle().stroke(.black.opacity(0.65), lineWidth: 2) }
             .frame(width: size, height: size)
-            .shadow(color: color.opacity(0.4), radius: 4)
+            .shadow(color: color.opacity(isLit ? 0.7 : 0), radius: 4)
             .accessibilityHidden(true)
     }
 }
 
 struct Lens: View {
+    var isLit = false
+
     var body: some View {
         Circle().fill(LinearGradient(colors: [.white, Color(white: 0.5), Color(white: 0.85)], startPoint: .topLeading, endPoint: .bottomTrailing))
             .overlay { Circle().fill(Color(white: 0.13)).padding(6) }
-            .overlay { Circle().fill(RadialGradient(colors: [Color(red: 0.51, green: 0.98, blue: 1), Color(red: 0.03, green: 0.68, blue: 0.85), Color(red: 0.02, green: 0.24, blue: 0.43)], center: .init(x: 0.35, y: 0.25), startRadius: 0, endRadius: 57)).padding(9) }
-            .overlay(alignment: .topLeading) { Ellipse().fill(.white.opacity(0.7)).frame(width: 23, height: 12).rotationEffect(.degrees(-40)).offset(x: 15, y: 15) }
+            .overlay { Circle().fill(RadialGradient(colors: isLit
+                ? [Color(red: 0.78, green: 1, blue: 1), Color(red: 0.03, green: 0.83, blue: 1), Color(red: 0.02, green: 0.40, blue: 0.65)]
+                : [Color(red: 0.15, green: 0.39, blue: 0.45), Color(red: 0.02, green: 0.23, blue: 0.31), Color(red: 0.01, green: 0.10, blue: 0.19)],
+                center: .init(x: 0.35, y: 0.25), startRadius: 0, endRadius: 57)).padding(9) }
+            .overlay(alignment: .topLeading) { Ellipse().fill(.white.opacity(isLit ? 0.85 : 0.3)).frame(width: 23, height: 12).rotationEffect(.degrees(-40)).offset(x: 15, y: 15) }
             .frame(width: 70, height: 70)
+            .shadow(color: .cyan.opacity(isLit ? 0.65 : 0), radius: 12)
             .shadow(color: .black.opacity(0.55), radius: 3, x: 2, y: 5)
             .accessibilityHidden(true)
+    }
+}
+
+struct ScannerLights: View {
+    var isScanning: Bool
+    var isSpeaking: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var activeLight = 0
+
+    private var isChasing: Bool { isScanning && !isSpeaking && !reduceMotion }
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Lens(isLit: isSpeaking)
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 9) {
+                    ForEach(0..<3) { index in
+                        Indicator(color: [.red, .yellow, .green][index],
+                                  isLit: isScanning && !isSpeaking && (reduceMotion || index == activeLight))
+                    }
+                }
+                Text("iDEX").font(.system(size: 28, weight: .black, design: .rounded)).italic()
+                    .foregroundStyle(Color(red: 0.35, green: 0.02, blue: 0.035))
+                    .shadow(color: .white.opacity(0.3), radius: 0, y: 1)
+            }
+        }
+        .accessibilityHidden(true)
+        .task(id: isChasing) {
+            activeLight = 0
+            guard isChasing else { return }
+            do {
+                while !Task.isCancelled {
+                    try await Task.sleep(for: .milliseconds(220))
+                    activeLight = (activeLight + 1) % 3
+                }
+            } catch { /* A finished scan or speech cancels the chase. */ }
+        }
     }
 }
 

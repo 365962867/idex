@@ -6,6 +6,58 @@ import UIKit
 @MainActor
 @Suite(.serialized)
 struct ScannerLayoutTests {
+    @Test func scanningCyclesThroughThreeLightsAndStopsForSpeech() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previousWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        let host = UIHostingController(rootView: ScannerLights(isScanning: true, isSpeaking: false)
+            .padding(24).background(DexTheme.red))
+        window.rootViewController = host
+        window.makeKeyAndVisible()
+        defer {
+            window.isHidden = true
+            previousWindow?.makeKey()
+        }
+        host.view.layoutIfNeeded()
+        try await Task.sleep(for: .milliseconds(100))
+
+        func snapshot() -> UIImage {
+            UIGraphicsImageRenderer(bounds: host.view.bounds).image { _ in
+                host.view.drawHierarchy(in: host.view.bounds, afterScreenUpdates: true)
+            }
+        }
+
+        var frames = Set<Data>()
+        for _ in 0..<20 {
+            let image = snapshot()
+            if frames.insert(try #require(image.pngData())).inserted {
+                Attachment.record(image, named: "scanner-chase-\(frames.count)", as: .png)
+            }
+            if frames.count >= 3 { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(frames.count >= 3)
+
+        host.rootView = ScannerLights(isScanning: true, isSpeaking: true)
+            .padding(24).background(DexTheme.red)
+        try await Task.sleep(for: .milliseconds(100))
+        let speaking = snapshot()
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(snapshot().pngData() == speaking.pngData())
+        Attachment.record(speaking, named: "scanner-chase-stopped-for-speech", as: .png)
+    }
+
+    @Test func scannerLightsDistinguishIdleScanningAndSpeech() throws {
+        for (name, scanning, speaking) in [("idle", false, false), ("scanning", true, false),
+                                           ("speaking", false, true), ("speech-overrides-scan", true, true)] {
+            let renderer = ImageRenderer(content: ScannerLights(isScanning: scanning, isSpeaking: speaking)
+                .padding(24).background(DexTheme.red))
+            renderer.scale = 3
+            let image = try #require(renderer.uiImage)
+            Attachment.record(image, named: "scanner-lights-\(name)", as: .png)
+        }
+    }
+
     @Test(arguments: [AppLanguage.en, .zhHans])
     func scannerStatesFitCoverAndExpandedLayouts(language: AppLanguage) throws {
         let savedLanguage = UserDefaults.standard.object(forKey: "idex.language")

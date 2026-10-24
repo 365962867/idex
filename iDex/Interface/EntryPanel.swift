@@ -57,7 +57,7 @@ struct EntryPanel: View {
                             Text(showStats ? store.text("BASE STATS", "基础能力") : store.text("FIELD NOTES", "观察记录"))
                                 .font(PixelFont.font(size: store.language == .en ? 8 : 14, language: store.language))
                             Spacer()
-                            Button { showStats.toggle(); DeviceAudio.shared.play(.button) } label: {
+                            Button { showStats.toggle(); store.audio.play(.button) } label: {
                                 Image(systemName: showStats ? "text.alignleft" : "chart.bar.xaxis").frame(width: 32, height: 28)
                             }.buttonStyle(.plain).accessibilityLabel(store.text("Toggle base stats", "切换基础能力"))
                         }
@@ -98,11 +98,11 @@ struct EntryPanel: View {
                             Text(store.text("READ", "朗读")).font(PixelFont.font(size: store.language == .en ? 8 : 14, language: store.language))
                         }
                     }.accessibilityIdentifier("read-button")
-                    Button { DeviceAudio.shared.stopSpeaking() } label: { Image(systemName: "stop.fill") }
+                    Button { store.audio.stopSpeaking() } label: { Image(systemName: "stop.fill") }
                         .accessibilityLabel(store.text("Stop reading", "停止朗读"))
                 }.buttonStyle(HardwareButtonStyle())
                 HStack {
-                    Button { store.showingCatalog = true; DeviceAudio.shared.play(.button) } label: {
+                    Button { store.showingCatalog = true; store.audio.play(.button) } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "square.grid.2x2.fill")
                             Text(store.text("BROWSE 151", "浏览151种")).font(PixelFont.font(size: store.language == .en ? 8 : 14, language: store.language))

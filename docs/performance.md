@@ -30,6 +30,53 @@ Camera output prefers available 8-bit bi-planar YUV formats, with BGRA as a fall
 
 ## Reproduce
 
+### Camera preview teardown and scan-to-speech stalls
+
+A physical iPhone Duo investigation on October 24 reproduced a roughly nine-second
+UI freeze when a scan removed the live camera preview. Instrumenting
+`CameraPreviewView.disconnectCamera()` isolated the delay: releasing the rotation
+observations and coordinator took about 0.1 ms, but setting
+`previewLayer.session = nil` on the main thread took 9.001 seconds. Camera
+start/stop already ran on a background queue; preview attachment and detachment
+still changed that same capture graph synchronously during SwiftUI view updates.
+This blocked the main run loop, including the blinking task, rendered frames,
+and speech-state callbacks. It was not model inference running on the main actor.
+
+Preview session attachment and detachment now run on the camera's serial queue,
+in order with session configuration and start/stop. The layer is retained until
+detachment completes; layout and rotation UI updates remain on the main actor.
+The connection completion checks that its view is still bound before updating
+rotation. Repeated layout passes no longer reapply an unchanged rotation angle.
+
+`ScanResponsivenessTests` mounts the actual scanner with native chimes and speech
+enabled at zero output volume. It measures main-run-loop display callbacks
+through scanning, speech startup, and rescanning while speech is active. It uses
+real model inference; its device-only case captures real camera frames. If a
+live image is uncertain, the test explicitly invokes Read instead of changing
+the automatic-narration rule. The store accepts an audio instance so these tests
+can exercise the complete production path silently.
+
+| Physical Duo workload | Before | After |
+| --- | ---: | ---: |
+| Largest UI frame gap during live-camera scans/rescans | 9.022 s | 20.9 ms |
+| First measured live-camera scan result | 9.015 s | 141 ms |
+| Largest UI frame gap in English sample/voice flow | 9.016 s | 36.4 ms |
+| Largest UI frame gap in Chinese sample/voice flow | 9.038 s | 20.9 ms |
+
+The live-camera inputs differ between runs; the directly timed preview-session
+setter isolates the nine-second blocking cost independently of recognition
+content. The simulator did not reproduce that device-specific wait. Its fixed
+English/Chinese flows had maximum callback gaps of 42/50 ms. These are focused
+display-callback measurements, not GPU frame-presentation guarantees or an
+assessment of audible speech quality. Audio output stays muted during automation.
+
+Run the regression on the simulator with
+`-only-testing:iDexTests/ScanResponsivenessTests`. The same suite on a connected,
+unlocked physical device additionally runs the live-camera case. Points of
+Interest include `Camera Preview Connect` and `Camera Preview Disconnect`.
+
+### Other performance workloads
+
 Run the focused performance workloads:
 
 ```sh

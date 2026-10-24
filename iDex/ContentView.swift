@@ -22,7 +22,7 @@ struct ContentView: View {
                     .frame(width: geometry.panelWidth, height: proxy.size.height)
                 if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" {
                     HingeObserver { value in
-                        if hingeIsOpen != nil, value != hingeIsOpen { DeviceAudio.shared.play(.open) }
+                        if hingeIsOpen != nil, value != hingeIsOpen { store.audio.play(.open) }
                         hingeIsOpen = value
                     }.frame(width: 1, height: 1).allowsHitTesting(false)
                 }
@@ -140,17 +140,7 @@ private struct ScannerPanel: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 13) {
-            Lens()
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 9) {
-                    Indicator(color: .red)
-                    Indicator(color: .yellow)
-                    Indicator(color: .green)
-                }
-                Text("iDEX").font(.system(size: 28, weight: .black, design: .rounded)).italic()
-                    .foregroundStyle(Color(red: 0.35, green: 0.02, blue: 0.035))
-                    .shadow(color: .white.opacity(0.3), radius: 0, y: 1)
-            }
+            ScannerLights(isScanning: store.isScanning, isSpeaking: store.audio.isSpeaking)
             Spacer()
             VStack(alignment: .trailing, spacing: 8) {
                 pixel(store.text("POKÉDEX", "宝可梦图鉴"), 10)
@@ -294,7 +284,7 @@ private struct ScannerPanel: View {
         HStack(alignment: .center) {
             VStack(alignment: .leading, spacing: 9) {
                 Button {
-                    DeviceAudio.shared.play(.button)
+                    store.audio.play(.button)
                     if compact { store.showingCompactEntry = true } else { store.showingCatalog = true }
                 } label: {
                     HStack(spacing: 8) {
@@ -307,7 +297,7 @@ private struct ScannerPanel: View {
             }.foregroundStyle(DexTheme.cream)
             Spacer()
             SpeakerGrille()
-            Button { store.showingSettings = true; DeviceAudio.shared.play(.button) } label: {
+            Button { store.showingSettings = true; store.audio.play(.button) } label: {
                 Image(systemName: "gearshape.fill").font(.system(size: 18)).frame(width: 44, height: 44)
             }.buttonStyle(.plain).foregroundStyle(.white.opacity(0.65))
                 .accessibilityLabel(store.text("Settings", "设置")).accessibilityIdentifier("settings-button")

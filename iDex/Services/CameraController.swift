@@ -100,6 +100,14 @@ final class CameraController {
     fileprivate func updateCaptureRotation(_ angle: CGFloat) {
         captureRotation = angle
     }
+
+    fileprivate func connectPreview(_ layer: AVCaptureVideoPreviewLayer, completion: @escaping @MainActor @Sendable () -> Void) {
+        worker.connectPreview(layer, completion: completion)
+    }
+
+    fileprivate func disconnectPreview(_ layer: AVCaptureVideoPreviewLayer) {
+        worker.disconnectPreview(layer)
+    }
 }
 
 /// Retain just one sensor frame. Rendering happens only on a scan, away from the
@@ -180,6 +188,28 @@ nonisolated private final class CameraSessionWorker: NSObject, AVCaptureVideoDat
         }
     }
 
+    // Assigning a preview's session changes the capture graph and may block.
+    // Serialize it with start/stop instead of doing it during SwiftUI layout or
+    // dismantling on the main thread. Layer geometry still belongs to UIKit.
+    func connectPreview(_ layer: AVCaptureVideoPreviewLayer, completion: @escaping @MainActor @Sendable () -> Void) {
+        let target = CameraPreviewTarget(layer: layer)
+        queue.async {
+            let interval = DexPerformance.begin("Camera Preview Connect")
+            target.layer.session = self.session
+            DexPerformance.end("Camera Preview Connect", interval)
+            Task { @MainActor in completion() }
+        }
+    }
+
+    func disconnectPreview(_ layer: AVCaptureVideoPreviewLayer) {
+        let target = CameraPreviewTarget(layer: layer)
+        queue.async {
+            let interval = DexPerformance.begin("Camera Preview Disconnect")
+            target.layer.session = nil
+            DexPerformance.end("Camera Preview Disconnect", interval)
+        }
+    }
+
     func snapshot() throws -> CameraFrame {
         try frames.snapshot()
     }
@@ -209,6 +239,13 @@ nonisolated private final class CameraSessionWorker: NSObject, AVCaptureVideoDat
             }
         }
     }
+}
+
+/// Only the capture queue changes the layer's session. UIKit retains ownership
+/// of its bounds and presentation; retaining the target also keeps teardown off
+/// the main thread after SwiftUI removes the preview view.
+nonisolated private struct CameraPreviewTarget: @unchecked Sendable {
+    let layer: AVCaptureVideoPreviewLayer
 }
 
 // Captures own their retained buffer; replacing or clearing the live frame
@@ -259,12 +296,12 @@ struct CameraPreview: UIViewRepresentable {
     func makeUIView(context: Context) -> CameraPreviewView {
         let view = CameraPreviewView()
         view.onCaptureRotation = { [weak controller] in controller?.updateCaptureRotation($0) }
-        view.updateCamera(session: controller.session, device: controller.device)
+        view.updateCamera(controller: controller)
         return view
     }
 
     func updateUIView(_ uiView: CameraPreviewView, context: Context) {
-        uiView.updateCamera(session: controller.session, device: controller.device)
+        uiView.updateCamera(controller: controller)
     }
 
     static func dismantleUIView(_ uiView: CameraPreviewView, coordinator: ()) {
@@ -276,6 +313,7 @@ struct CameraPreview: UIViewRepresentable {
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
     var onCaptureRotation: ((CGFloat) -> Void)?
+    private var controller: CameraController?
     private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
     private var previewRotationObservation: NSKeyValueObservation?
     private var captureRotationObservation: NSKeyValueObservation?
@@ -300,11 +338,15 @@ struct CameraPreview: UIViewRepresentable {
         updateRotation()
     }
 
-    func updateCamera(session: AVCaptureSession, device: AVCaptureDevice?) {
-        if previewLayer.session !== session {
-            previewLayer.session = session
+    func updateCamera(controller: CameraController) {
+        if self.controller !== controller {
+            self.controller = controller
+            controller.connectPreview(previewLayer) { [weak self, weak controller] in
+                guard let self, self.controller === controller else { return }
+                self.updateRotation()
+            }
         }
-        if let device, rotationCoordinator?.device !== device {
+        if let device = controller.device, rotationCoordinator?.device !== device {
             previewRotationObservation = nil
             captureRotationObservation = nil
             let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
@@ -326,7 +368,8 @@ struct CameraPreview: UIViewRepresentable {
         captureRotationObservation = nil
         rotationCoordinator = nil
         onCaptureRotation = nil
-        previewLayer.session = nil
+        controller?.disconnectPreview(previewLayer)
+        controller = nil
     }
 
     func updateRotation() {
@@ -334,7 +377,9 @@ struct CameraPreview: UIViewRepresentable {
         // Duo reports .portrait on both displays, but their native rotations
         // differ. The coordinator accounts for the camera and preview layer.
         let rotation = coordinator.videoRotationAngleForHorizonLevelPreview
-        if let connection = previewLayer.connection, connection.isVideoRotationAngleSupported(rotation) {
+        if let connection = previewLayer.connection,
+           connection.videoRotationAngle != rotation,
+           connection.isVideoRotationAngleSupported(rotation) {
             connection.videoRotationAngle = rotation
         }
         // Photo rotation is relative to the sensor, independently of the layer.

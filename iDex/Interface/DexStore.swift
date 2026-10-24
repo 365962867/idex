@@ -7,7 +7,7 @@ final class DexStore {
     var language: AppLanguage {
         didSet {
             UserDefaults.standard.set(language.rawValue, forKey: "idex.language")
-            DeviceAudio.shared.stopSpeaking()
+            audio.stopSpeaking()
             message = nil
         }
     }
@@ -31,12 +31,14 @@ final class DexStore {
     var confidence: Double?
     var identified = false
     var seenIDs: Set<Int> = []
+    let audio: DeviceAudio
     let camera = CameraController()
     private let classifier = PokemonClassifier()
     private var operationID = UUID()
     private var isActive = true
 
-    init() {
+    init(audio: DeviceAudio? = nil) {
+        self.audio = audio ?? .shared
         PixelFont.register()
         language = UserDefaults.standard.string(forKey: "idex.language").flatMap(AppLanguage.init(rawValue:)) ?? .systemDefault
         selected = PokemonCatalog.shared.pokemon(id: UserDefaults.standard.integer(forKey: "idex.lastViewed")) ?? PokemonCatalog.shared.pokemon(id: 25)
@@ -61,17 +63,17 @@ final class DexStore {
         resetScanner()
         useSample = false
         camera.start()
-        DeviceAudio.shared.play(.button)
+        audio.play(.button)
     }
 
     func rescan() {
         resetScanner()
         if !useSample { camera.start() }
-        DeviceAudio.shared.play(.button)
+        audio.play(.button)
     }
 
     private func resetScanner() {
-        DeviceAudio.shared.stopSpeaking()
+        audio.stopSpeaking()
         cancelScan()
         showingCompactEntry = false
         capturedImage = nil
@@ -95,8 +97,8 @@ final class DexStore {
         identified = false
         capturedImage = nil
         scanResult = nil
-        DeviceAudio.shared.stopSpeaking()
-        DeviceAudio.shared.play(.scan)
+        audio.stopSpeaking()
+        audio.play(.scan)
         defer { finishScan(operation) }
         do {
             let image: CGImage
@@ -118,7 +120,7 @@ final class DexStore {
             message = error is RecognitionError
                 ? text("Recognition is unavailable. Restart iDex and try again.", "识别暂不可用，请重启 iDex 后重试。")
                 : text("Couldn't scan. Try a photo or enable the camera.", "未能扫描，请导入照片或启用相机。")
-            DeviceAudio.shared.play(.error)
+            audio.play(.error)
         }
     }
 
@@ -133,8 +135,8 @@ final class DexStore {
         identified = false
         capturedImage = nil
         scanResult = nil
-        DeviceAudio.shared.stopSpeaking()
-        DeviceAudio.shared.play(.scan)
+        audio.stopSpeaking()
+        audio.play(.scan)
         defer { finishScan(operation) }
         do {
             guard let data = try await item.loadTransferable(type: Data.self) else { throw ScanError.imageUnavailable }
@@ -150,7 +152,7 @@ final class DexStore {
         } catch {
             guard operation == operationID, isActive else { return }
             message = text("This photo couldn't be read. Choose another image.", "无法读取这张照片，请选择其他图片。")
-            DeviceAudio.shared.play(.error)
+            audio.play(.error)
         }
     }
 
@@ -168,7 +170,7 @@ final class DexStore {
     private func finishScan(_ operation: UUID) {
         guard operation == operationID else { return }
         isScanning = false
-        DeviceAudio.shared.stopScanning()
+        audio.stopScanning()
     }
 
     func applyRecognition(_ result: RecognitionResult) throws {
@@ -186,59 +188,59 @@ final class DexStore {
         identified = result.accepted != nil
         guard identified else {
             message = text("Best match; low confidence.", "最可能的匹配，置信度较低。")
-            DeviceAudio.shared.play(.button)
+            audio.play(.button)
             return
         }
         message = nil
         seenIDs.insert(pokemon.id)
         UserDefaults.standard.set(seenIDs.sorted(), forKey: "idex.seen")
-        DeviceAudio.shared.play(.success)
+        audio.play(.success)
         speak()
     }
 
     func browse(_ pokemon: Pokemon) {
-        DeviceAudio.shared.stopSpeaking()
+        audio.stopSpeaking()
         cancelScan()
         selected = pokemon
         confidence = nil
         identified = false
         showingCatalog = false
-        DeviceAudio.shared.play(.button)
+        audio.play(.button)
     }
 
     func step(_ delta: Int) {
-        DeviceAudio.shared.stopSpeaking()
+        audio.stopSpeaking()
         cancelScan()
         guard let selected else { return }
         let id = ((selected.id - 1 + delta + 151) % 151) + 1
         self.selected = PokemonCatalog.shared.pokemon(id: id)
         confidence = nil
         identified = false
-        DeviceAudio.shared.play(.button)
+        audio.play(.button)
     }
 
     func cancelScan() {
         operationID = UUID()
         isScanning = false
-        DeviceAudio.shared.stopScanning()
+        audio.stopScanning()
     }
 
     func suspend() {
         isActive = false
         cancelScan()
         camera.stop()
-        DeviceAudio.shared.suspend()
+        audio.suspend()
     }
 
     func resume() {
         isActive = true
-        DeviceAudio.shared.resume()
+        audio.resume()
         if !useSample && capturedImage == nil && scanResult == nil { camera.start() }
     }
 
     func speak() {
         guard isActive, let selected else { return }
-        DeviceAudio.shared.speak(selected.spokenEntry(in: language), languageCode: language.speechLocale)
+        audio.speak(selected.spokenEntry(in: language), languageCode: language.speechLocale)
     }
 
     private static func opaqueImage(_ image: CGImage) -> CGImage {

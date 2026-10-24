@@ -132,7 +132,11 @@ private struct ScannerPanel: View {
             VStack(alignment: .trailing, spacing: 8) {
                 pixel(store.text("POKÉDEX", "宝可梦图鉴"), 10)
                 pixel(store.text("FIELD UNIT 001", "野外终端 001"), 6)
-            }.foregroundStyle(DexTheme.cream.opacity(0.9))
+            }
+            // Reserve the cover camera's expanded privacy-indicator area even
+            // before capture starts, so entering live view never shifts the UI.
+            .offset(y: 28)
+            .foregroundStyle(DexTheme.cream.opacity(0.9))
         }
     }
 
@@ -271,6 +275,16 @@ private struct Reticle: Shape {
     }
 }
 
-#Preview("Duo · closed", traits: .fixedLayout(width: 466, height: 678)) { ContentView() }
+// Fixed-layout previews don't inherit a physical window's corner geometry.
+// Supply the Duo display profiles here; the running app uses the system's
+// active display container instead, including when switching between screens.
+#Preview("Duo · closed", traits: .fixedLayout(width: 466, height: 678)) {
+    ContentView().containerShape(UnevenRoundedRectangle(
+        topLeadingRadius: 8, bottomLeadingRadius: 8,
+        bottomTrailingRadius: 59, topTrailingRadius: 59
+    ))
+}
 
-#Preview("Duo · open", traits: .fixedLayout(width: 951, height: 669)) { ContentView() }
+#Preview("Duo · open", traits: .fixedLayout(width: 951, height: 669)) {
+    ContentView().containerShape(RoundedRectangle(cornerRadius: 55))
+}

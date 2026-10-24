@@ -21,8 +21,12 @@ struct ShellSurface: View {
                     }
                 }
             }.allowsHitTesting(false)
-            RoundedRectangle(cornerRadius: 30).stroke(.black.opacity(0.35), lineWidth: 5).padding(9)
-            RoundedRectangle(cornerRadius: 26).stroke(.white.opacity(0.16), lineWidth: 1).padding(12)
+            // Resolve each corner independently against the active display. The
+            // cover's 8pt leading corners become square at these insets, while
+            // its 59pt trailing corners (and the interior's 55pt corners) stay
+            // concentric with the screen instead of using a fixed decorative R.
+            ConcentricRectangle().stroke(.black.opacity(0.35), lineWidth: 5).padding(9)
+            ConcentricRectangle().stroke(.white.opacity(0.16), lineWidth: 1).padding(12)
         }
     }
 }

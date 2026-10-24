@@ -30,6 +30,7 @@ enum CameraError: LocalizedError {
 final class CameraController {
     private(set) var status: CameraStatus = .idle
     private(set) var error: CameraError?
+    private(set) var device: AVCaptureDevice?
     @ObservationIgnored private let worker = CameraSessionWorker()
     @ObservationIgnored private var startTask: Task<Void, Never>?
     @ObservationIgnored private var wantsCamera = false
@@ -63,8 +64,9 @@ final class CameraController {
                 return
             }
             do {
-                try await self.worker.start()
+                let device = try await self.worker.start()
                 if self.wantsCamera, !Task.isCancelled, generation == self.startGeneration {
+                    self.device = device
                     self.status = .ready
                 } else if !self.wantsCamera {
                     self.worker.stop()
@@ -108,17 +110,19 @@ nonisolated private final class CameraSessionWorker: NSObject, AVCapturePhotoCap
     private let photoOutput = AVCapturePhotoOutput()
     private let imageContext = CIContext(options: [.cacheIntermediates: false])
     private var configured = false
+    private var device: AVCaptureDevice?
     private var pendingCapture: CheckedContinuation<CGImage, Error>?
     private var pendingCaptureID: Int64?
 
-    func start() async throws {
+    func start() async throws -> AVCaptureDevice {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {
                     if !self.configured { try self.configure() }
                     if !self.session.isRunning { self.session.startRunning() }
                     guard self.session.isRunning else { throw CameraError.configurationFailed }
-                    continuation.resume()
+                    guard let device = self.device else { throw CameraError.noCamera }
+                    continuation.resume(returning: device)
                 } catch {
                     continuation.resume(throwing: error)
                 }
@@ -139,6 +143,7 @@ nonisolated private final class CameraSessionWorker: NSObject, AVCapturePhotoCap
         session.addInput(input)
         session.addOutput(photoOutput)
         photoOutput.maxPhotoQualityPrioritization = .balanced
+        self.device = device
         configured = true
     }
 
@@ -222,16 +227,17 @@ struct CameraPreview: UIViewRepresentable {
 
     func makeUIView(context: Context) -> CameraPreviewView {
         let view = CameraPreviewView()
-        view.previewLayer.session = controller.session
         view.onCaptureRotation = { [weak controller] in controller?.updateCaptureRotation($0) }
+        view.updateCamera(session: controller.session, device: controller.device)
         return view
     }
 
     func updateUIView(_ uiView: CameraPreviewView, context: Context) {
-        if uiView.previewLayer.session !== controller.session {
-            uiView.previewLayer.session = controller.session
-        }
-        uiView.updateRotation()
+        uiView.updateCamera(session: controller.session, device: controller.device)
+    }
+
+    static func dismantleUIView(_ uiView: CameraPreviewView, coordinator: ()) {
+        uiView.disconnectCamera()
     }
 }
 
@@ -239,6 +245,9 @@ struct CameraPreview: UIViewRepresentable {
     override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
     var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
     var onCaptureRotation: ((CGFloat) -> Void)?
+    private var rotationCoordinator: AVCaptureDevice.RotationCoordinator?
+    private var previewRotationObservation: NSKeyValueObservation?
+    private var captureRotationObservation: NSKeyValueObservation?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -255,19 +264,49 @@ struct CameraPreview: UIViewRepresentable {
         updateRotation()
     }
 
-    func updateRotation() {
-        guard let orientation = window?.windowScene?.effectiveGeometry.interfaceOrientation else { return }
-        let rotation: CGFloat
-        switch orientation {
-        case .portrait: rotation = 90
-        case .portraitUpsideDown: rotation = 270
-        case .landscapeLeft: rotation = 180
-        case .landscapeRight: rotation = 0
-        default: rotation = 90
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        updateRotation()
+    }
+
+    func updateCamera(session: AVCaptureSession, device: AVCaptureDevice?) {
+        if previewLayer.session !== session {
+            previewLayer.session = session
         }
+        if let device, rotationCoordinator?.device !== device {
+            previewRotationObservation = nil
+            captureRotationObservation = nil
+            let coordinator = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: previewLayer)
+            rotationCoordinator = coordinator
+            // AVFoundation delivers both observations on the main queue. Apply
+            // them immediately, including display changes with no UI rotation.
+            previewRotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelPreview, options: [.initial, .new]) { [weak self] _, _ in
+                MainActor.assumeIsolated { self?.updateRotation() }
+            }
+            captureRotationObservation = coordinator.observe(\.videoRotationAngleForHorizonLevelCapture, options: [.initial, .new]) { [weak self] _, _ in
+                MainActor.assumeIsolated { self?.updateRotation() }
+            }
+        }
+        updateRotation()
+    }
+
+    func disconnectCamera() {
+        previewRotationObservation = nil
+        captureRotationObservation = nil
+        rotationCoordinator = nil
+        onCaptureRotation = nil
+        previewLayer.session = nil
+    }
+
+    func updateRotation() {
+        guard let coordinator = rotationCoordinator else { return }
+        // Duo reports .portrait on both displays, but their native rotations
+        // differ. The coordinator accounts for the camera and preview layer.
+        let rotation = coordinator.videoRotationAngleForHorizonLevelPreview
         if let connection = previewLayer.connection, connection.isVideoRotationAngleSupported(rotation) {
             connection.videoRotationAngle = rotation
         }
-        onCaptureRotation?(rotation)
+        // Photo rotation is relative to the sensor, independently of the layer.
+        onCaptureRotation?(coordinator.videoRotationAngleForHorizonLevelCapture)
     }
 }

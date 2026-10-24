@@ -52,16 +52,22 @@ struct CompactRecordView: View {
     @Bindable var store: DexStore
 
     var body: some View {
-        EntryPanel(store: store).background { ShellSurface() }.ignoresSafeArea()
-            .environment(\.locale, Locale(identifier: store.language == .en ? "en" : "zh-Hans"))
-            .preferredColorScheme(.dark)
-            .statusBarHidden()
-            .persistentSystemOverlays(.hidden)
-            .overlay(alignment: .topTrailing) {
+        GeometryReader { proxy in
+            ZStack(alignment: .topTrailing) {
+                ShellSurface()
+                EntryPanel(store: store)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
                 Button { store.showingCompactEntry = false } label: {
                     Image(systemName: "xmark.circle.fill").font(.title2).padding(20)
                 }.tint(DexTheme.cream).accessibilityLabel(store.text("Close record", "关闭记录")).accessibilityIdentifier("close-record")
             }
+            .clipped()
+        }
+        .ignoresSafeArea()
+        .environment(\.locale, Locale(identifier: store.language == .en ? "en" : "zh-Hans"))
+        .preferredColorScheme(.dark)
+        .statusBarHidden()
+        .persistentSystemOverlays(.hidden)
     }
 }
 

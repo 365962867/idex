@@ -63,6 +63,31 @@ final class iDexUITests: XCTestCase {
         XCTAssertTrue(app.buttons["identify-button"].label.contains("SCAN"))
     }
 
+    func testRecordFillsCoverDisplayAndCloses() throws {
+        let app = launchInEnglish()
+        guard !app.buttons["catalog-button"].exists else {
+            throw XCTSkip("The expanded display shows the record beside the scanner.")
+        }
+        for language in ["en", "zhHans"] {
+            if language != "en" {
+                app.terminate()
+                app.launchArguments = ["-idex.language", language, "-idex.soundEnabled", "NO"]
+                app.launch()
+            }
+            app.buttons["record-button"].tap()
+            let number = app.staticTexts["entry-number"]
+            XCTAssertTrue(number.waitForExistence(timeout: 5))
+            let close = app.buttons["close-record"]
+            XCTAssertTrue(close.isHittable)
+            attachScreenshot("record-cover-\(language)", app: app)
+            XCTAssertGreaterThanOrEqual(number.frame.minY - app.frame.minY, 100)
+            XCTAssertTrue(app.frame.contains(close.frame))
+            XCTAssertGreaterThan(close.frame.midX, app.frame.maxX - 60)
+            close.tap()
+            XCTAssertTrue(app.buttons["settings-button"].waitForExistence(timeout: 5))
+        }
+    }
+
     func testCatalogSearchAcceptsEnglishChineseAndDexNumber() throws {
         let app = launchInEnglish()
         openCatalog(in: app)

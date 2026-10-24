@@ -7,6 +7,92 @@ import UIKit
 @Suite("Bundled offline Pokémon recognition", .serialized)
 @MainActor
 struct RecognitionTests {
+    @Test func scanningFreezesTheSampleBeforeRevealingItsSpriteAndAllowsRescanning() async throws {
+        let soundWasEnabled = DeviceAudio.shared.isSoundEnabled
+        let savedViewed = UserDefaults.standard.object(forKey: "idex.lastViewed")
+        let savedSeen = UserDefaults.standard.object(forKey: "idex.seen")
+        DeviceAudio.shared.isSoundEnabled = false
+        let store = DexStore()
+        store.useSample = true
+        defer {
+            store.suspend()
+            DeviceAudio.shared.isSoundEnabled = soundWasEnabled
+            UserDefaults.standard.set(savedViewed, forKey: "idex.lastViewed")
+            UserDefaults.standard.set(savedSeen, forKey: "idex.seen")
+        }
+        let started = ContinuousClock.now
+        let task = Task { await store.scan() }
+        for _ in 0..<100 {
+            if store.capturedImage != nil { break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(store.isScanning)
+        #expect(store.scannedPokemon == nil)
+        #expect(store.confidence == nil)
+        await task.value
+
+        #expect(started.duration(to: .now) >= .milliseconds(1100))
+        #expect(!store.isScanning)
+        #expect(store.scannedPokemon?.id == 25)
+        #expect(store.identified)
+        #expect(!store.showingCompactEntry)
+        let seen = store.seenIDs
+        store.rescan()
+        #expect(store.useSample)
+        #expect(store.capturedImage == nil)
+        #expect(store.scannedPokemon == nil)
+        #expect(store.confidence == nil)
+        #expect(store.candidates.isEmpty)
+        #expect(store.message == nil)
+        #expect(store.seenIDs == seen)
+        await store.scan()
+        #expect(store.scannedPokemon?.id == 25)
+    }
+
+    @Test func cancellingAScanPreventsItsLateResultFromReplacingTheNextTarget() async {
+        let soundWasEnabled = DeviceAudio.shared.isSoundEnabled
+        DeviceAudio.shared.isSoundEnabled = false
+        let store = DexStore()
+        store.useSample = true
+        defer {
+            store.suspend()
+            DeviceAudio.shared.isSoundEnabled = soundWasEnabled
+        }
+        let originalSeen = store.seenIDs
+        let task = Task { await store.scan() }
+        for _ in 0..<100 {
+            if store.capturedImage != nil { break }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        store.rescan()
+        store.sampleID = 6
+        await task.value
+        #expect(!store.isScanning)
+        #expect(store.scannedPokemon == nil)
+        #expect(store.capturedImage == nil)
+        #expect(store.confidence == nil)
+        #expect(store.message == nil)
+        #expect(store.seenIDs == originalSeen)
+    }
+
+    @Test func browsingTheArchiveKeepsTheScannedSpriteAndItsConfidence() throws {
+        let soundWasEnabled = DeviceAudio.shared.isSoundEnabled
+        let savedViewed = UserDefaults.standard.object(forKey: "idex.lastViewed")
+        DeviceAudio.shared.isSoundEnabled = false
+        defer {
+            DeviceAudio.shared.isSoundEnabled = soundWasEnabled
+            UserDefaults.standard.set(savedViewed, forKey: "idex.lastViewed")
+        }
+        let store = DexStore()
+        let candidate = RecognitionCandidate(dexID: 25, name: "pikachu", confidence: 0.1, logit: 1)
+        try store.applyRecognition(RecognitionResult(candidates: [candidate], accepted: nil, logitMargin: 0))
+        store.browse(try #require(PokemonCatalog.shared.pokemon(id: 6)))
+        #expect(store.selected?.id == 6)
+        #expect(store.scannedPokemon?.id == 25)
+        #expect(store.scanResult?.candidates.first?.confidence == 0.1)
+        #expect(store.scanResult?.accepted == nil)
+    }
+
     @Test("Core ML identifies opaque sprites including previously rejected matches", arguments: [25, 6, 65, 83, 86, 98, 129])
     func identifiesKnownPokemon(dexID: Int) async throws {
         let sprite = try #require(UIImage(named: String(format: "pokemon-%03d", dexID)))

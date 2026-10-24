@@ -2,7 +2,7 @@ import AVFoundation
 import Observation
 import UIKit
 
-enum DeviceSound {
+enum DeviceSound: Equatable {
     case button, scan, success, error, open
 }
 
@@ -31,6 +31,7 @@ final class DeviceAudio {
     @ObservationIgnored private var speechTask: Task<Void, Never>?
     @ObservationIgnored private var soundGeneration = 0
     @ObservationIgnored private var speechGeneration = 0
+    @ObservationIgnored private var currentSound: DeviceSound?
 
     private init() {
         let defaults = UserDefaults.standard
@@ -41,6 +42,8 @@ final class DeviceAudio {
     var isSpeaking: Bool { synthesizer.isSpeaking }
 
     func play(_ cue: DeviceSound) {
+        // Hinge and navigation feedback must not interrupt the active scan loop.
+        if currentSound == .scan && (cue == .open || cue == .button) { return }
         switch cue {
         case .success: UINotificationFeedbackGenerator().notificationOccurred(.success)
         case .error: UINotificationFeedbackGenerator().notificationOccurred(.warning)
@@ -49,6 +52,7 @@ final class DeviceAudio {
         case .button: UIImpactFeedbackGenerator(style: .light).impactOccurred(intensity: 0.6)
         }
         guard isSoundEnabled else { return }
+        currentSound = cue
         soundGeneration += 1
         let generation = soundGeneration
         soundTask?.cancel()
@@ -62,6 +66,7 @@ final class DeviceAudio {
             do {
                 let player = try AVAudioPlayer(data: Self.wave(for: cue))
                 player.volume = 0.32
+                player.numberOfLoops = cue == .scan ? -1 : 0
                 player.prepareToPlay()
                 self.soundPlayer = player
                 player.play()
@@ -99,13 +104,23 @@ final class DeviceAudio {
     }
 
     func stopAll() {
+        stopSound()
+        stopSpeaking()
+        releaseSession()
+    }
+
+    func stopScanning() {
+        guard currentSound == .scan else { return }
+        stopSound()
+    }
+
+    private func stopSound() {
         soundGeneration += 1
         soundTask?.cancel()
         soundTask = nil
         soundPlayer?.stop()
         soundPlayer = nil
-        stopSpeaking()
-        releaseSession()
+        currentSound = nil
     }
 
     /// Coalesce simultaneous chime/speech requests onto a single nonblocking

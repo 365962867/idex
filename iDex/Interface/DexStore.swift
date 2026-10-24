@@ -18,6 +18,7 @@ final class DexStore {
     var message: String?
     var candidates: [RecognitionCandidate] = []
     var capturedImage: UIImage?
+    private(set) var scanResult: RecognitionResult?
     #if targetEnvironment(simulator)
     var useSample = true
     #else
@@ -44,6 +45,12 @@ final class DexStore {
 
     func text(_ en: String, _ zh: String) -> String { language.text(en, zh) }
     var sample: Pokemon? { PokemonCatalog.shared.pokemon(id: sampleID) }
+    var scannedPokemon: Pokemon? {
+        scanResult?.candidates.first.flatMap { PokemonCatalog.shared.pokemon(id: $0.dexID) }
+    }
+    var scanStatusTitle: String {
+        scanResult?.accepted != nil ? text("IDENTIFIED", "已识别") : text("BEST MATCH", "最可能匹配")
+    }
     var entryStatusTitle: String {
         if identified { return text("IDENTIFIED", "已识别") }
         if confidence != nil { return text("BEST MATCH", "最可能匹配") }
@@ -51,16 +58,28 @@ final class DexStore {
     }
 
     func chooseCamera() {
+        resetScanner()
+        useSample = false
+        camera.start()
+        DeviceAudio.shared.play(.button)
+    }
+
+    func rescan() {
+        resetScanner()
+        if !useSample { camera.start() }
+        DeviceAudio.shared.play(.button)
+    }
+
+    private func resetScanner() {
         DeviceAudio.shared.stopSpeaking()
         cancelScan()
-        useSample = false
+        showingCompactEntry = false
         capturedImage = nil
+        scanResult = nil
         confidence = nil
         candidates = []
         message = nil
         identified = false
-        camera.start()
-        DeviceAudio.shared.play(.button)
     }
 
     func scan() async {
@@ -72,9 +91,11 @@ final class DexStore {
         message = nil
         candidates = []
         identified = false
+        capturedImage = nil
+        scanResult = nil
         DeviceAudio.shared.stopSpeaking()
         DeviceAudio.shared.play(.scan)
-        defer { if operation == operationID { isScanning = false } }
+        defer { finishScan(operation) }
         do {
             let image: CGImage
             if useSample {
@@ -84,9 +105,12 @@ final class DexStore {
             } else {
                 image = try await camera.capture()
                 guard operation == operationID, isActive else { return }
-                capturedImage = UIImage(cgImage: image)
             }
+            capturedImage = UIImage(cgImage: image)
+            if !useSample { camera.stop() }
             try await recognize(image, operation: operation)
+        } catch is CancellationError {
+            // Cancellation leaves the captured image available until Rescan.
         } catch {
             guard operation == operationID, isActive else { return }
             message = error is RecognitionError
@@ -105,9 +129,11 @@ final class DexStore {
         message = nil
         candidates = []
         identified = false
+        capturedImage = nil
+        scanResult = nil
         DeviceAudio.shared.stopSpeaking()
         DeviceAudio.shared.play(.scan)
-        defer { if operation == operationID { isScanning = false } }
+        defer { finishScan(operation) }
         do {
             guard let data = try await item.loadTransferable(type: Data.self), let source = UIImage(data: data), let image = Self.orientedImage(source) else { throw ScanError.imageUnavailable }
             guard operation == operationID, isActive else { return }
@@ -115,6 +141,8 @@ final class DexStore {
             useSample = false
             capturedImage = UIImage(cgImage: image)
             try await recognize(image, operation: operation)
+        } catch is CancellationError {
+            // Cancelled imports must not surface an unreadable-photo error.
         } catch {
             guard operation == operationID, isActive else { return }
             message = text("This photo couldn't be read. Choose another image.", "无法读取这张照片，请选择其他图片。")
@@ -123,9 +151,20 @@ final class DexStore {
     }
 
     private func recognize(_ image: CGImage, operation: UUID) async throws {
+        // Capture comes first. Give even a warm model one visible scanner sweep,
+        // while inference runs immediately on the classifier actor.
+        let revealTime = ContinuousClock.now.advanced(by: .milliseconds(1100))
         let result = try await classifier.classify(image: image)
-        guard operation == operationID, isActive else { return }
+        try await Task.sleep(until: revealTime, clock: .continuous)
+        guard operation == operationID, isActive, !Task.isCancelled else { return }
+        finishScan(operation)
         try applyRecognition(result)
+    }
+
+    private func finishScan(_ operation: UUID) {
+        guard operation == operationID else { return }
+        isScanning = false
+        DeviceAudio.shared.stopScanning()
     }
 
     func applyRecognition(_ result: RecognitionResult) throws {
@@ -135,6 +174,7 @@ final class DexStore {
         }
         candidates = result.candidates
         selected = pokemon
+        scanResult = result
         confidence = match.confidence
         identified = result.accepted != nil
         guard identified else {
@@ -173,6 +213,7 @@ final class DexStore {
     func cancelScan() {
         operationID = UUID()
         isScanning = false
+        DeviceAudio.shared.stopScanning()
     }
 
     func suspend() {

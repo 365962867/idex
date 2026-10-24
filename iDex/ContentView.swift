@@ -34,9 +34,6 @@ struct ContentView: View {
                     store.showingCatalog = false
                 }
             }
-            .onChange(of: store.confidence) { _, value in
-                if value != nil && !geometry.isOpen { store.showingCompactEntry = true }
-            }
         }
         .ignoresSafeArea()
         .preferredColorScheme(.dark)
@@ -71,7 +68,28 @@ struct CompactRecordView: View {
 private struct ScannerPanel: View {
     @Bindable var store: DexStore
     @Binding var photo: PhotosPickerItem?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let compact: Bool
+
+    private var canRescan: Bool {
+        store.capturedImage != nil || store.scannedPokemon != nil || store.message != nil
+    }
+
+    private var scanDisabled: Bool {
+        store.isScanning || (!canRescan && !store.useSample && store.camera.status != .ready)
+    }
+
+    private var scanButtonTitle: String {
+        if store.isScanning { return store.text("SCANNING", "扫描中") }
+        return canRescan ? store.text("RESCAN", "重新扫描") : store.text("SCAN", "扫描")
+    }
+
+    private var viewfinderTitle: String {
+        if store.isScanning { return store.text("SCANNING…", "扫描中…") }
+        if store.scannedPokemon != nil { return store.scanStatusTitle }
+        if store.useSample { return store.text("SAMPLE TARGET", "样本目标") }
+        return store.capturedImage == nil ? store.text("LIVE VIEW", "实时取景") : store.text("PHOTO REVIEW", "照片回看")
+    }
 
     var body: some View {
         GeometryReader { proxy in
@@ -89,25 +107,27 @@ private struct ScannerPanel: View {
                 HStack(spacing: 10) {
                     Button { store.chooseCamera() } label: { Image(systemName: "camera.fill").frame(width: 28) }
                         .accessibilityLabel(store.text("Use camera", "使用相机")).accessibilityIdentifier("camera-button")
+                        .disabled(store.isScanning)
                     PhotosPicker(selection: $photo, matching: .images) {
                         Image(systemName: "photo.on.rectangle.angled").frame(width: 28)
-                    }.accessibilityLabel(store.text("Import photo", "导入照片"))
+                    }.accessibilityLabel(store.text("Import photo", "导入照片")).disabled(store.isScanning)
                     Spacer(minLength: 0)
                     Button {
-                        if !store.useSample && store.capturedImage != nil { store.chooseCamera() }
+                        if canRescan { store.rescan() }
                         else { Task { await store.scan() } }
                     } label: {
                         HStack(spacing: 8) {
-                            Image(systemName: "viewfinder")
-                            pixel(store.isScanning ? store.text("SCANNING", "扫描中") : (store.capturedImage != nil && !store.useSample ? store.text("LIVE", "取景") : store.text("IDENTIFY", "识别")), 9)
+                            Image(systemName: canRescan && !store.isScanning ? "arrow.clockwise" : "viewfinder")
+                            pixel(scanButtonTitle, 9)
                         }
                     }.buttonStyle(HardwareButtonStyle(color: Color(red: 0.11, green: 0.27, blue: 0.24)))
-                        .disabled(store.isScanning || (!store.useSample && store.capturedImage == nil && store.camera.status != .ready))
-                        .opacity(store.isScanning || (!store.useSample && store.capturedImage == nil && store.camera.status != .ready) ? 0.55 : 1)
+                        .disabled(scanDisabled)
+                        .opacity(scanDisabled ? 0.55 : 1)
                         .accessibilityIdentifier("identify-button")
                 }
                 .buttonStyle(HardwareButtonStyle()).frame(width: proxy.size.width - 76).offset(x: 38, y: layout.viewfinder.maxY + 35)
                 footer.frame(width: proxy.size.width - 80).position(x: proxy.size.width / 2, y: proxy.size.height - 49)
+                    .disabled(store.isScanning)
             }
         }
     }
@@ -145,8 +165,28 @@ private struct ScannerPanel: View {
             RoundedRectangle(cornerRadius: 6).fill(DexTheme.charcoal).padding(10)
             ZStack {
                 DexTheme.lcd
-                if let captured = store.capturedImage {
+                if let pokemon = store.scannedPokemon {
+                    targetGrid
+                    VStack(spacing: 10) {
+                        Image(pokemon.spriteName).resizable().interpolation(.none).scaledToFit()
+                            .frame(width: side * 0.58, height: side * 0.58)
+                            .shadow(color: DexTheme.ink.opacity(0.2), radius: 0, x: 4, y: 6)
+                            .accessibilityLabel(pokemon.name(in: store.language))
+                            .accessibilityIdentifier("scan-result-sprite")
+                        pixel(pokemon.name(in: store.language), 10)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                            .accessibilityIdentifier("scan-result-name")
+                        if store.scanResult?.accepted == nil {
+                            pixel(store.text("LOW CONFIDENCE · RESCAN", "置信度较低 · 请重新扫描"), 6)
+                        }
+                    }.padding(.horizontal, 24).foregroundStyle(DexTheme.ink)
+                        .accessibilityElement(children: .contain).accessibilityIdentifier("scan-result")
+                        .transition(reduceMotion ? .opacity : .scale(scale: 0.92).combined(with: .opacity))
+                } else if let captured = store.capturedImage {
                     Image(uiImage: captured).resizable().scaledToFill()
+                        .frame(width: side, height: side)
+                        .accessibilityLabel(store.text("Captured scan image", "已捕获的扫描图像"))
+                        .accessibilityIdentifier("scan-capture")
                 } else if !store.useSample && store.camera.status == .ready {
                     CameraPreview(controller: store.camera)
                 } else if store.useSample {
@@ -161,24 +201,29 @@ private struct ScannerPanel: View {
                     cameraStatus
                 }
                 ScanLines().allowsHitTesting(false)
+                if store.isScanning {
+                    ScanSweep(reduceMotion: reduceMotion)
+                        .accessibilityLabel(store.text("Scanning captured image", "正在扫描已捕获的图像"))
+                        .accessibilityIdentifier("scan-animation")
+                }
                 VStack {
                     HStack(spacing: 6) {
                         Circle().fill(store.isScanning ? .orange : DexTheme.ink).frame(width: 5, height: 5)
-                        pixel(store.isScanning ? store.text("ANALYZING…", "分析中…") : store.useSample ? store.text("SAMPLE TARGET", "样本目标") : (store.capturedImage == nil ? store.text("LIVE VIEW", "实时取景") : store.text("PHOTO REVIEW", "照片回看")), 7)
+                        pixel(viewfinderTitle, 7)
                         Spacer()
                         Image(systemName: "battery.100percent").font(.system(size: 14))
                     }
                     Spacer()
-                    if store.isScanning { ProgressView().tint(DexTheme.ink).scaleEffect(1.4) }
-                    Spacer()
                     HStack {
-                        pixel(store.useSample ? "#\(store.sample?.number ?? "025")" : "AF / 1×", 8)
+                        pixel(store.scannedPokemon.map { "#\($0.number)" } ?? (store.useSample ? "#\(store.sample?.number ?? "025")" : "AF / 1×"), 8)
                         Spacer()
-                        pixel(store.text("OFFLINE", "离线"), 7)
+                        pixel(store.scannedPokemon != nil ? "\(Int((store.scanResult?.candidates.first?.confidence ?? 0) * 100))%" : store.text("OFFLINE", "离线"), 7)
                     }
                 }.padding(14).foregroundStyle(DexTheme.ink)
-                Reticle().stroke(DexTheme.ink.opacity(0.6), lineWidth: 2).padding(42).allowsHitTesting(false)
-                if let message = store.message {
+                if store.scannedPokemon == nil {
+                    Reticle().stroke(DexTheme.ink.opacity(0.6), lineWidth: 2).padding(42).allowsHitTesting(false)
+                }
+                if let message = store.message, store.scannedPokemon == nil {
                     VStack(spacing: 8) {
                         Image(systemName: "viewfinder.trianglebadge.exclamationmark").font(.title2)
                         Text(message).font(PixelFont.font(size: store.language == .en ? 8 : 14, language: store.language)).multilineTextAlignment(.center).lineSpacing(6)
@@ -191,6 +236,7 @@ private struct ScannerPanel: View {
                         .accessibilityIdentifier("scan-message")
                 }
             }.frame(width: side, height: side).clipped().clipShape(RoundedRectangle(cornerRadius: 3))
+                .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: store.scannedPokemon?.id)
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("viewfinder")
             VStack {
@@ -217,13 +263,19 @@ private struct ScannerPanel: View {
     private var cameraStatus: some View {
         VStack(spacing: 14) {
             Image(systemName: "camera.aperture").font(.system(size: 42, weight: .ultraLight))
-            Text(store.camera.status == .denied ? store.text("Camera access is off", "相机权限未开启") : store.text("Camera unavailable", "相机暂不可用"))
-                .font(.system(size: 15, design: .monospaced))
-            if store.camera.status == .denied {
+            if store.camera.status == .requesting {
+                ProgressView().tint(DexTheme.ink)
+                Text(store.text("Starting camera…", "正在启动相机…"))
+                    .font(.system(size: 15, design: .monospaced))
+            } else if store.camera.status == .denied {
+                Text(store.text("Camera access is off", "相机权限未开启"))
+                    .font(.system(size: 15, design: .monospaced))
                 Button(store.text("Open Settings", "打开设置")) {
                     if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
                 }.font(.system(size: 13, weight: .bold)).tint(DexTheme.ink)
             } else {
+                Text(store.text("Camera unavailable", "相机暂不可用"))
+                    .font(.system(size: 15, design: .monospaced))
                 Text(store.text("Import a photo", "导入照片"))
                     .font(.system(size: 12, design: .monospaced))
             }
@@ -256,6 +308,27 @@ private struct ScannerPanel: View {
 
     private func pixel(_ text: String, _ size: CGFloat) -> some View {
         Text(text).font(PixelFont.font(size: store.language == .zhHans ? size + 4 : size, language: store.language))
+    }
+}
+
+private struct ScanSweep: View {
+    let reduceMotion: Bool
+    @State private var started = Date()
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { timeline in
+            GeometryReader { proxy in
+                let progress = reduceMotion ? 0.5 : timeline.date.timeIntervalSince(started).truncatingRemainder(dividingBy: 1.1) / 1.1
+                let beamY = proxy.size.height * progress
+                ZStack(alignment: .top) {
+                    DexTheme.ink.opacity(0.16)
+                    LinearGradient(colors: [.clear, DexTheme.lcd.opacity(0.65)], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 70).offset(y: beamY - 70)
+                    Rectangle().fill(DexTheme.cream).frame(height: 3)
+                        .shadow(color: DexTheme.lcd, radius: 8).offset(y: beamY)
+                }
+            }
+        }.allowsHitTesting(false).accessibilityElement(children: .ignore)
     }
 }
 

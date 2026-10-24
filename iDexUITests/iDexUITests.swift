@@ -18,7 +18,20 @@ final class iDexUITests: XCTestCase {
 
         // The sample follows the camera's Core ML pipeline; no launch argument
         // replaces inference with a canned result.
-        XCTAssertTrue(app.staticTexts["IDENTIFIED"].waitForExistence(timeout: 45), app.debugDescription)
+        XCTAssertTrue(element("scan-result", in: app).waitForExistence(timeout: 45), app.debugDescription)
+        XCTAssertEqual(app.staticTexts["scan-result-name"].label, "Pikachu")
+        XCTAssertTrue(element("scan-result-sprite", in: app).exists)
+        XCTAssertTrue(identify.isEnabled)
+        XCTAssertTrue(identify.label.contains("RESCAN"))
+        XCTAssertFalse(app.buttons["close-record"].exists)
+        attachScreenshot("pikachu-scanner-result", app: app)
+        identify.tap()
+        XCTAssertTrue(app.staticTexts["SAMPLE TARGET"].waitForExistence(timeout: 5))
+        XCTAssertFalse(element("scan-result", in: app).exists)
+        XCTAssertTrue(identify.label.contains("SCAN"))
+        identify.tap()
+        XCTAssertTrue(element("scan-result", in: app).waitForExistence(timeout: 45))
+        if !app.buttons["catalog-button"].exists { app.buttons["record-button"].tap() }
         XCTAssertEqual(app.staticTexts["pokemon-name"].label, "Pikachu")
         XCTAssertEqual(app.staticTexts["entry-number"].label, "No. 025")
         XCTAssertTrue(app.buttons["read-button"].exists)
@@ -33,7 +46,7 @@ final class iDexUITests: XCTestCase {
         app.buttons["language-zhHans"].tap()
         XCTAssertTrue(app.navigationBars["设备设置"].waitForExistence(timeout: 5))
         app.buttons["settings-done"].tap()
-        XCTAssertTrue(app.buttons["identify-button"].label.contains("识别"))
+        XCTAssertTrue(app.buttons["identify-button"].label.contains("扫描"))
         attachScreenshot("scanner-zh", app: app)
         app.terminate()
 
@@ -41,13 +54,13 @@ final class iDexUITests: XCTestCase {
         app.launchArguments = ["-idex.soundEnabled", "NO"]
         app.launch()
         XCTAssertTrue(app.buttons["settings-button"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["identify-button"].label.contains("识别"))
+        XCTAssertTrue(app.buttons["identify-button"].label.contains("扫描"))
         app.buttons["settings-button"].tap()
         XCTAssertTrue(app.navigationBars["设备设置"].waitForExistence(timeout: 5))
         app.buttons["language-en"].tap()
         XCTAssertTrue(app.navigationBars["Device settings"].waitForExistence(timeout: 5))
         app.buttons["settings-done"].tap()
-        XCTAssertTrue(app.buttons["identify-button"].label.contains("IDENTIFY"))
+        XCTAssertTrue(app.buttons["identify-button"].label.contains("SCAN"))
     }
 
     func testCatalogSearchAcceptsEnglishChineseAndDexNumber() throws {

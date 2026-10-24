@@ -10,14 +10,13 @@ enum CameraStatus: Equatable {
 }
 
 enum CameraError: LocalizedError {
-    case notReady, noCamera, configurationFailed, captureInProgress, captureFailed, cancelled
+    case notReady, noCamera, configurationFailed, captureFailed, cancelled
 
     var errorDescription: String? {
         switch self {
         case .notReady: "The camera is not ready."
         case .noCamera: "No camera is available on this device."
         case .configurationFailed: "The camera could not be started."
-        case .captureInProgress: "A capture is already in progress."
         case .captureFailed: "The photo could not be captured."
         case .cancelled: "The capture was cancelled."
         }
@@ -90,11 +89,12 @@ final class CameraController {
         status = .idle
     }
 
-    /// Returned pixels have their EXIF orientation applied, then the exact center
-    /// square is cropped, matching the aspect-fill preview's visible region.
+    /// Retain the latest viewfinder frame before suspending. Moving the camera
+    /// after the tap cannot change the image being scanned.
     func capture() async throws -> CGImage {
         guard status == .ready else { throw CameraError.notReady }
-        return try await worker.capture(rotation: captureRotation)
+        let frame = try worker.snapshot()
+        return try await worker.render(frame, rotation: captureRotation)
     }
 
     fileprivate func updateCaptureRotation(_ angle: CGFloat) {
@@ -102,28 +102,30 @@ final class CameraController {
     }
 }
 
-/// All session configuration, start/stop, and capture work is serialized away
-/// from the main thread. The delegate only transfers results back to this queue.
-nonisolated private final class CameraSessionWorker: NSObject, AVCapturePhotoCaptureDelegate, @unchecked Sendable {
+/// Retain just one sensor frame. Rendering happens only on a scan, away from the
+/// UI actor; there is no still-photo shutter, autofocus, or encoding delay.
+nonisolated private final class CameraSessionWorker: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
     private let queue = DispatchQueue(label: "app.idex.camera", qos: .userInitiated)
-    private let photoOutput = AVCapturePhotoOutput()
+    private let frameQueue = DispatchQueue(label: "app.idex.camera.frames", qos: .userInitiated)
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let frames = CameraFrameBuffer()
     private let imageContext = CIContext(options: [.cacheIntermediates: false])
     private var configured = false
     private var device: AVCaptureDevice?
-    private var pendingCapture: CheckedContinuation<CGImage, Error>?
-    private var pendingCaptureID: Int64?
+    private var pendingStart: CheckedContinuation<AVCaptureDevice, Error>?
 
     func start() async throws -> AVCaptureDevice {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
                 do {
                     if !self.configured { try self.configure() }
+                    self.frameQueue.sync { self.frames.clear() }
+                    self.pendingStart = continuation
                     if !self.session.isRunning { self.session.startRunning() }
                     guard self.session.isRunning else { throw CameraError.configurationFailed }
-                    guard let device = self.device else { throw CameraError.noCamera }
-                    continuation.resume(returning: device)
                 } catch {
+                    self.pendingStart = nil
                     continuation.resume(throwing: error)
                 }
             }
@@ -136,13 +138,19 @@ nonisolated private final class CameraSessionWorker: NSObject, AVCapturePhotoCap
         let input = try AVCaptureDeviceInput(device: device)
         session.beginConfiguration()
         defer { session.commitConfiguration() }
-        session.sessionPreset = .photo
-        guard session.canAddInput(input), session.canAddOutput(photoOutput) else {
+        session.sessionPreset = .high
+        guard session.canAddInput(input), session.canAddOutput(videoOutput) else {
             throw CameraError.configurationFailed
         }
         session.addInput(input)
-        session.addOutput(photoOutput)
-        photoOutput.maxPhotoQualityPrioritization = .balanced
+        videoOutput.alwaysDiscardsLateVideoFrames = true
+        videoOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        videoOutput.setSampleBufferDelegate(self, queue: frameQueue)
+        session.addOutput(videoOutput)
+        // Keep sensor pixels unrotated; apply the tap-time capture angle once.
+        if let connection = videoOutput.connection(with: .video), connection.isVideoRotationAngleSupported(0) {
+            connection.videoRotationAngle = 0
+        }
         self.device = device
         configured = true
     }
@@ -150,75 +158,84 @@ nonisolated private final class CameraSessionWorker: NSObject, AVCapturePhotoCap
     func stop() {
         queue.async {
             if self.session.isRunning { self.session.stopRunning() }
-            if let pending = self.pendingCapture {
-                self.pendingCapture = nil
-                self.pendingCaptureID = nil
+            self.frameQueue.sync { self.frames.clear() }
+            if let pending = self.pendingStart {
+                self.pendingStart = nil
                 pending.resume(throwing: CameraError.cancelled)
             }
         }
     }
 
-    func capture(rotation: CGFloat) async throws -> CGImage {
+    func snapshot() throws -> CameraFrame {
+        try frames.snapshot()
+    }
+
+    func render(_ frame: CameraFrame, rotation: CGFloat) async throws -> CGImage {
         try await withCheckedThrowingContinuation { continuation in
             queue.async {
-                guard self.session.isRunning else {
-                    continuation.resume(throwing: CameraError.notReady)
-                    return
-                }
-                guard self.pendingCapture == nil else {
-                    continuation.resume(throwing: CameraError.captureInProgress)
-                    return
-                }
-                guard let connection = self.photoOutput.connection(with: .video) else {
+                guard let result = CameraFrameRenderer.squareImage(
+                    CIImage(cvPixelBuffer: frame.pixels), rotation: rotation, context: self.imageContext
+                ) else {
                     continuation.resume(throwing: CameraError.captureFailed)
                     return
                 }
-                if connection.isVideoRotationAngleSupported(rotation) {
-                    connection.videoRotationAngle = rotation
-                }
-                let settings = AVCapturePhotoSettings()
-                settings.photoQualityPrioritization = .balanced
-                self.pendingCapture = continuation
-                self.pendingCaptureID = settings.uniqueID
-                self.photoOutput.capturePhoto(with: settings, delegate: self)
+                continuation.resume(returning: result)
             }
         }
     }
 
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        let data = error == nil ? photo.fileDataRepresentation() : nil
-        let captureID = photo.resolvedSettings.uniqueID
-        queue.async {
-            guard let continuation = self.pendingCapture,
-                  self.pendingCaptureID == captureID else { return }
-            self.pendingCapture = nil
-            self.pendingCaptureID = nil
-            guard error == nil, let data,
-                  let image = CIImage(data: data, options: [.applyOrientationProperty: true]) else {
-                continuation.resume(throwing: error ?? CameraError.captureFailed)
-                return
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        if frames.update(pixels) {
+            queue.async {
+                guard let pending = self.pendingStart else { return }
+                self.pendingStart = nil
+                if let device = self.device { pending.resume(returning: device) }
+                else { pending.resume(throwing: CameraError.noCamera) }
             }
-            let extent = image.extent
-            let side = floor(min(extent.width, extent.height))
-            let crop = CGRect(x: floor(extent.midX - side / 2), y: floor(extent.midY - side / 2), width: side, height: side)
-            guard let result = self.imageContext.createCGImage(image, from: crop) else {
-                continuation.resume(throwing: CameraError.captureFailed)
-                return
-            }
-            continuation.resume(returning: result)
+        }
+    }
+}
+
+// Captures own their retained buffer; replacing or clearing the live frame
+// cannot mutate a snapshot already handed to recognition.
+nonisolated struct CameraFrame: @unchecked Sendable {
+    let pixels: CVPixelBuffer
+}
+
+nonisolated final class CameraFrameBuffer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latest: CameraFrame?
+
+    @discardableResult func update(_ pixels: CVPixelBuffer) -> Bool {
+        lock.withLock {
+            let isFirstFrame = latest == nil
+            latest = CameraFrame(pixels: pixels)
+            return isFirstFrame
         }
     }
 
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
-        guard let error else { return }
-        let captureID = resolvedSettings.uniqueID
-        queue.async {
-            guard let continuation = self.pendingCapture,
-                  self.pendingCaptureID == captureID else { return }
-            self.pendingCapture = nil
-            self.pendingCaptureID = nil
-            continuation.resume(throwing: error)
+    func clear() {
+        lock.withLock { latest = nil }
+    }
+
+    func snapshot() throws -> CameraFrame {
+        try lock.withLock {
+            guard let latest else { throw CameraError.notReady }
+            return latest
         }
+    }
+}
+
+nonisolated enum CameraFrameRenderer {
+    static func squareImage(_ image: CIImage, rotation: CGFloat, context: CIContext) -> CGImage? {
+        // AVFoundation angles are clockwise; Core Image coordinates point up.
+        let upright = image.transformed(by: CGAffineTransform(rotationAngle: -rotation * .pi / 180))
+        let extent = upright.extent
+        let side = floor(min(extent.width, extent.height))
+        guard side > 0 else { return nil }
+        let crop = CGRect(x: floor(extent.midX - side / 2), y: floor(extent.midY - side / 2), width: side, height: side)
+        return context.createCGImage(upright, from: crop)
     }
 }
 

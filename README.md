@@ -12,7 +12,7 @@ Native SwiftUI · English / 简体中文 · On-device Core ML
 | :---: | :---: | :---: |
 | <img src="docs/screenshots/scanner-result-en.png" width="250" alt="English scanner identifying the bundled Pikachu sample"> | <img src="docs/screenshots/record-en.png" width="250" alt="Pikachu record with types, dimensions and field notes"> | <img src="docs/screenshots/record-zh.png" width="250" alt="Charizard record in Simplified Chinese"> |
 
-Real iPhone Duo simulator captures. Pikachu is the labelled simulator sample, scanned by the bundled model. No wild Pokémon were inconvenienced.
+No wild Pokémon were inconvenienced.
 
 [Before the scan](docs/screenshots/scanner-sample-en.png) · [Search the archive](docs/screenshots/catalog-search-en.png)
 

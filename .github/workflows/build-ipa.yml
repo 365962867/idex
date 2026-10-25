@@ -1,0 +1,48 @@
+name: Build iDex IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Verify Xcode
+        run: xcodebuild -version
+
+      - name: Build unsigned app
+        run: |
+          xcodebuild \
+            -project iDex.xcodeproj \
+            -scheme iDex \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/iDexBuild" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build
+
+      - name: Package IPA
+        run: |
+          APP="$RUNNER_TEMP/iDexBuild/Build/Products/Release-iphoneos/iDex.app"
+          test -d "$APP"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/iDex.app"
+          cd "$RUNNER_TEMP/ipa"
+          zip -qry "$GITHUB_WORKSPACE/iDex-unsigned.ipa" Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: iDex-unsigned-IPA
+          path: iDex-unsigned.ipa
+          retention-days: 7

@@ -6,17 +6,35 @@ import SwiftUI
 enum AppLanguage: String, CaseIterable, Identifiable, Codable {
     case en
     case zhHans
+    case ja
 
     var id: String { rawValue }
-    var title: String { self == .en ? "English" : "简体中文" }
-    var speechLocale: String { self == .en ? "en-US" : "zh-CN" }
+    var title: String { text("English", "简体中文", "日本語") }
+    var localeIdentifier: String { text("en", "zh-Hans", "ja") }
+    var speechLocale: String { text("en-US", "zh-CN", "ja-JP") }
 
     static var systemDefault: AppLanguage {
-        Locale.preferredLanguages.first?.hasPrefix("zh") == true ? .zhHans : .en
+        preferred(in: Locale.preferredLanguages)
     }
 
-    func text(_ english: String, _ chinese: String) -> String {
-        self == .en ? english : chinese
+    static func preferred(in languages: [String]) -> AppLanguage {
+        for identifier in languages {
+            switch Locale(identifier: identifier).language.languageCode?.identifier {
+            case "en": return .en
+            case "zh": return .zhHans
+            case "ja": return .ja
+            default: continue
+            }
+        }
+        return .en
+    }
+
+    func text(_ english: String, _ chinese: String, _ japanese: String) -> String {
+        switch self {
+        case .en: return english
+        case .zhHans: return chinese
+        case .ja: return japanese
+        }
     }
 }
 
@@ -27,12 +45,12 @@ struct PokemonStat: Codable, Hashable, Identifiable {
 
     func title(in language: AppLanguage) -> String {
         switch name {
-        case "hp": return language.text("HP", "体力")
-        case "attack": return language.text("ATTACK", "攻击")
-        case "defense": return language.text("DEFENSE", "防御")
-        case "special-attack": return language.text("SP. ATK", "特攻")
-        case "special-defense": return language.text("SP. DEF", "特防")
-        case "speed": return language.text("SPEED", "速度")
+        case "hp": return language.text("HP", "体力", "HP")
+        case "attack": return language.text("ATTACK", "攻击", "こうげき")
+        case "defense": return language.text("DEFENSE", "防御", "ぼうぎょ")
+        case "special-attack": return language.text("SP. ATK", "特攻", "とくこう")
+        case "special-defense": return language.text("SP. DEF", "特防", "とくぼう")
+        case "speed": return language.text("SPEED", "速度", "すばやさ")
         default: return name.uppercased()
         }
     }
@@ -42,6 +60,7 @@ struct Pokemon: Identifiable, Codable, Hashable {
     let id: Int
     let englishName: String
     let chineseName: String
+    let japaneseName: String
     /// Stable, English type identifiers, such as `grass` and `poison`.
     let types: [String]
     /// Height in metres.
@@ -50,8 +69,10 @@ struct Pokemon: Identifiable, Codable, Hashable {
     let weight: Double
     let englishDescription: String
     let chineseDescription: String
+    let japaneseDescription: String
     let englishGenus: String
     let chineseGenus: String
+    let japaneseGenus: String
     let stats: [PokemonStat]
 
     var number: String { String(format: "%03d", id) }
@@ -59,15 +80,15 @@ struct Pokemon: Identifiable, Codable, Hashable {
     var totalStats: Int { stats.reduce(0) { $0 + $1.value } }
 
     func name(in language: AppLanguage) -> String {
-        language.text(englishName, chineseName)
+        language.text(englishName, chineseName, japaneseName)
     }
 
     func description(in language: AppLanguage) -> String {
-        language.text(englishDescription, chineseDescription)
+        language.text(englishDescription, chineseDescription, japaneseDescription)
     }
 
     func genus(in language: AppLanguage) -> String {
-        language.text(englishGenus, chineseGenus)
+        language.text(englishGenus, chineseGenus, japaneseGenus)
     }
 
     func typeNames(in language: AppLanguage) -> [String] {
@@ -75,8 +96,11 @@ struct Pokemon: Identifiable, Codable, Hashable {
     }
 
     static func typeName(_ type: String, in language: AppLanguage) -> String {
-        guard language == .zhHans else { return type.uppercased() }
-        return chineseTypeNames[type] ?? type
+        switch language {
+        case .en: return type.uppercased()
+        case .zhHans: return chineseTypeNames[type] ?? type
+        case .ja: return japaneseTypeNames[type] ?? type
+        }
     }
 
     private static let chineseTypeNames = [
@@ -87,9 +111,20 @@ struct Pokemon: Identifiable, Codable, Hashable {
         "dark": "恶", "fairy": "妖精"
     ]
 
+    private static let japaneseTypeNames = [
+        "normal": "ノーマル", "fighting": "かくとう", "flying": "ひこう", "poison": "どく",
+        "ground": "じめん", "rock": "いわ", "bug": "むし", "ghost": "ゴースト",
+        "steel": "はがね", "fire": "ほのお", "water": "みず", "grass": "くさ",
+        "electric": "でんき", "psychic": "エスパー", "ice": "こおり", "dragon": "ドラゴン",
+        "dark": "あく", "fairy": "フェアリー"
+    ]
+
     func spokenEntry(in language: AppLanguage) -> String {
         if language == .zhHans {
             return "\(chineseName)。全国图鉴编号\(id)。\(chineseGenus)。属性，\(typeNames(in: language).joined(separator: "，"))。\(chineseDescription)"
+        }
+        if language == .ja {
+            return "\(japaneseName)。全国図鑑番号\(id)。\(japaneseGenus)。\(typeNames(in: language).joined(separator: "、"))タイプ。\(japaneseDescription)"
         }
         return "\(englishName). Pokédex number \(id). \(englishGenus). \(typeNames(in: language).joined(separator: " and ")) type. \(englishDescription)"
     }
@@ -106,6 +141,15 @@ struct PokemonCatalog {
         let number: String
         let englishTypes: [String]
         let chineseTypes: [String]
+        let japaneseTypes: [String]
+
+        func types(in language: AppLanguage) -> [String] {
+            switch language {
+            case .en: return englishTypes
+            case .zhHans: return chineseTypes
+            case .ja: return japaneseTypes
+            }
+        }
     }
 
     private init(bundle: Bundle = .main) {
@@ -122,7 +166,8 @@ struct PokemonCatalog {
         entriesByID = Dictionary(uniqueKeysWithValues: entries.map { ($0.id, $0) })
         searchIndex = entries.map {
             SearchEntry(pokemon: $0, number: $0.number,
-                        englishTypes: $0.typeNames(in: .en), chineseTypes: $0.typeNames(in: .zhHans))
+                        englishTypes: $0.typeNames(in: .en), chineseTypes: $0.typeNames(in: .zhHans),
+                        japaneseTypes: $0.typeNames(in: .ja))
         }
     }
 
@@ -137,8 +182,9 @@ struct PokemonCatalog {
         return searchIndex.compactMap { entry in
             let matches = entry.pokemon.englishName.localizedCaseInsensitiveContains(value)
                 || entry.pokemon.chineseName.contains(value)
+                || entry.pokemon.japaneseName.contains(value)
                 || entry.number.contains(numberQuery)
-                || (language == .en ? entry.englishTypes : entry.chineseTypes).contains { $0.localizedCaseInsensitiveContains(value) }
+                || entry.types(in: language).contains { $0.localizedCaseInsensitiveContains(value) }
             return matches ? entry.pokemon : nil
         }
     }
@@ -150,11 +196,12 @@ enum PixelFont {
     static let latinName = "PressStart2P-Regular"
     // Determined from the upstream OTF's PostScript name.
     static let chineseName = "Fusion-Pixel-12px-Prop-zh-Hans-Regular"
+    static let japaneseName = "Fusion-Pixel-12px-Prop-ja-Regular"
 
     static func register() {
         guard !didRegister else { return }
         didRegister = true
-        for (name, ext) in [("PressStart2P-Regular", "ttf"), ("FusionPixel-12px-zh-Hans", "otf")] {
+        for (name, ext) in [("PressStart2P-Regular", "ttf"), ("FusionPixel-12px-zh-Hans", "otf"), ("FusionPixel-12px-ja", "otf")] {
             if let url = Bundle.main.url(forResource: name, withExtension: ext) {
                 CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
             }
@@ -162,6 +209,6 @@ enum PixelFont {
     }
 
     static func font(size: CGFloat, language: AppLanguage = .en) -> Font {
-        .custom(language == .en ? latinName : chineseName, size: size)
+        .custom(language.text(latinName, chineseName, japaneseName), size: size)
     }
 }

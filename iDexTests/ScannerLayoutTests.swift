@@ -58,7 +58,7 @@ struct ScannerLayoutTests {
         }
     }
 
-    @Test(arguments: [AppLanguage.en, .zhHans])
+    @Test(arguments: AppLanguage.allCases)
     func scannerStatesFitCoverAndExpandedLayouts(language: AppLanguage) throws {
         let savedLanguage = UserDefaults.standard.object(forKey: "idex.language")
         let savedViewed = UserDefaults.standard.object(forKey: "idex.lastViewed")
@@ -92,6 +92,37 @@ struct ScannerLayoutTests {
             }
             store.rescan()
             store.capturedImage = UIImage(named: "pokemon-025")
+        }
+        store.suspend()
+    }
+
+    @Test func japaneseRecordFitsCoverAndExpandedLayouts() throws {
+        let savedLanguage = UserDefaults.standard.object(forKey: "idex.language")
+        let savedViewed = UserDefaults.standard.object(forKey: "idex.lastViewed")
+        let soundWasEnabled = DeviceAudio.shared.isSoundEnabled
+        DeviceAudio.shared.isSoundEnabled = false
+        defer {
+            DeviceAudio.shared.isSoundEnabled = soundWasEnabled
+            UserDefaults.standard.set(savedLanguage, forKey: "idex.language")
+            UserDefaults.standard.set(savedViewed, forKey: "idex.lastViewed")
+        }
+        let store = DexStore()
+        store.language = .ja
+        // A long name and two type badges exercise the compact entry column.
+        store.selected = PokemonCatalog.shared.pokemon(id: 71)
+        for size in [CGSize(width: 466, height: 678), CGSize(width: 951, height: 669)] {
+            let expanded = size.width > 850
+            let renderer = ImageRenderer(content: Group {
+                if expanded {
+                    ContentView(store: store)
+                } else {
+                    CompactRecordView(store: store)
+                }
+            }.frame(width: size.width, height: size.height))
+            renderer.scale = 2
+            let image = try #require(renderer.uiImage)
+            #expect(image.size == size)
+            Attachment.record(image, named: "record-\(expanded ? "expanded" : "cover")-ja", as: .png)
         }
         store.suspend()
     }

@@ -10,8 +10,10 @@ struct CatalogTests {
         #expect(entries.map(\.id) == Array(1...151))
         #expect(Set(entries.map(\.englishName)).count == 151)
         #expect(Set(entries.map(\.chineseName)).count == 151)
+        #expect(Set(entries.map(\.japaneseName)).count == 151)
         #expect(entries.allSatisfy { !$0.englishDescription.isEmpty && !$0.chineseDescription.isEmpty })
         #expect(entries.allSatisfy { !$0.englishGenus.isEmpty && !$0.chineseGenus.isEmpty })
+        #expect(entries.allSatisfy { !$0.japaneseDescription.isEmpty && !$0.japaneseGenus.isEmpty })
         #expect(entries.allSatisfy { $0.height > 0 && $0.weight > 0 })
         #expect(entries.allSatisfy { $0.stats.count == 6 && $0.stats.allSatisfy { $0.value > 0 } })
         #expect(entries.allSatisfy { (1...2).contains($0.types.count) })
@@ -25,11 +27,56 @@ struct CatalogTests {
         }
     }
 
-    @Test func bothPixelFontsRegisterFromBundledFiles() {
+    @Test func allPixelFontsRegisterFromBundledFiles() {
         PixelFont.register()
-        for fontName in [PixelFont.latinName, PixelFont.chineseName] {
+        for fontName in [PixelFont.latinName, PixelFont.chineseName, PixelFont.japaneseName] {
             let font = CTFontCreateWithName(fontName as CFString, 12, nil)
             #expect(CTFontCopyPostScriptName(font) as String == fontName)
+        }
+    }
+
+    @Test func japaneseFontCoversCatalogText() {
+        PixelFont.register()
+        let font = CTFontCreateWithName(PixelFont.japaneseName as CFString, 17, nil)
+        for pokemon in PokemonCatalog.shared.entries {
+            let text = pokemon.japaneseName + pokemon.japaneseGenus + pokemon.japaneseDescription
+            let characters = Array(text.utf16)
+            var glyphs = [CGGlyph](repeating: 0, count: characters.count)
+            #expect(CTFontGetGlyphsForCharacters(font, characters, &glyphs, characters.count),
+                    "Missing Japanese glyph for \(pokemon.englishName)")
+        }
+    }
+
+    @Test func languageSelectionResolvesSupportedSystemPreferences() {
+        #expect(AppLanguage.preferred(in: ["ja-JP", "en-US"]) == .ja)
+        #expect(AppLanguage.preferred(in: ["ja"]) == .ja)
+        #expect(AppLanguage.preferred(in: ["zh-Hans-CN", "ja-JP"]) == .zhHans)
+        #expect(AppLanguage.preferred(in: ["en-GB", "ja-JP"]) == .en)
+        #expect(AppLanguage.preferred(in: ["fr-FR", "ja-JP"]) == .ja)
+        #expect(AppLanguage.preferred(in: ["fr-FR"]) == .en)
+        #expect(AppLanguage.preferred(in: []) == .en)
+        #expect(AppLanguage.ja.title == "日本語")
+        #expect(AppLanguage.ja.localeIdentifier == "ja")
+        #expect(AppLanguage.ja.speechLocale == "ja-JP")
+        #expect(AppLanguage.ja.text("Scan", "扫描", "スキャン") == "スキャン")
+    }
+
+    @Test func japaneseEntriesTypesStatsAndNarrationUseJapanese() throws {
+        let catalog = PokemonCatalog.shared
+        let pikachu = try #require(catalog.pokemon(id: 25))
+        #expect(pikachu.name(in: .ja) == "ピカチュウ")
+        #expect(pikachu.genus(in: .ja) == "ねずみポケモン")
+        #expect(pikachu.description(in: .ja) == pikachu.japaneseDescription)
+        #expect(pikachu.typeNames(in: .ja) == ["でんき"])
+        #expect(pikachu.stats.map { $0.title(in: .ja) } == ["HP", "こうげき", "ぼうぎょ", "とくこう", "とくぼう", "すばやさ"])
+        #expect(pikachu.spokenEntry(in: .ja).hasPrefix("ピカチュウ。全国図鑑番号25。ねずみポケモン。でんきタイプ。"))
+        #expect(pikachu.spokenEntry(in: .ja).hasSuffix(pikachu.japaneseDescription))
+        #expect(try #require(catalog.pokemon(id: 6)).typeNames(in: .ja) == ["ほのお", "ひこう"])
+        let fire = catalog.search("ほのお", language: .ja)
+        #expect(!fire.isEmpty)
+        #expect(fire.allSatisfy { $0.types.contains("fire") })
+        for type in Set(catalog.entries.flatMap(\.types)) {
+            #expect(Pokemon.typeName(type, in: .ja) != type)
         }
     }
 
@@ -65,11 +112,11 @@ struct CatalogTests {
         #expect(catalog.pokemon(id: 152) == nil)
     }
 
-    @Test func searchFindsEverySpeciesByEitherNameOrNumberInDexOrder() {
+    @Test func searchFindsEverySpeciesByAnyLanguageNameOrNumberInDexOrder() {
         let catalog = PokemonCatalog.shared
         for language in AppLanguage.allCases {
             for pokemon in catalog.entries {
-                for query in [pokemon.englishName, pokemon.chineseName, pokemon.number] {
+                for query in [pokemon.englishName, pokemon.chineseName, pokemon.japaneseName, pokemon.number] {
                     let ids = catalog.search(query, language: language).map(\.id)
                     #expect(ids.contains(pokemon.id))
                     #expect(ids == ids.sorted())
@@ -81,8 +128,8 @@ struct CatalogTests {
         }
     }
 
-    @Test func systemCameraPromptHasBothTranslations() throws {
-        for (locale, expectedWord) in [("en", "camera"), ("zh-Hans", "相机")] {
+    @Test func systemCameraPromptHasAllTranslations() throws {
+        for (locale, expectedWord) in [("en", "camera"), ("zh-Hans", "相机"), ("ja", "カメラ")] {
             let path = try #require(Bundle.main.path(forResource: locale, ofType: "lproj"))
             let localizedBundle = try #require(Bundle(path: path))
             let text = localizedBundle.localizedString(forKey: "NSCameraUsageDescription", value: nil, table: "InfoPlist")

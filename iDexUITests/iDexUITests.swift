@@ -68,7 +68,7 @@ final class iDexUITests: XCTestCase {
         guard !app.buttons["catalog-button"].exists else {
             throw XCTSkip("The expanded display shows the record beside the scanner.")
         }
-        for language in ["en", "zhHans"] {
+        for language in ["en", "zhHans", "ja"] {
             if language != "en" {
                 app.terminate()
                 app.launchArguments = ["-idex.language", language, "-idex.soundEnabled", "NO"]
@@ -89,6 +89,56 @@ final class iDexUITests: XCTestCase {
             close.tap()
             XCTAssertTrue(app.buttons["settings-button"].waitForExistence(timeout: 5))
         }
+    }
+
+    func testJapaneseSelectionPersistsAndLocalizesScannerRecordAndSearch() throws {
+        let app = launchInEnglish()
+        app.buttons["settings-button"].tap()
+        XCTAssertTrue(app.buttons["language-ja"].waitForExistence(timeout: 5))
+        app.buttons["language-ja"].tap()
+        XCTAssertTrue(app.navigationBars["デバイス設定"].waitForExistence(timeout: 5))
+        attachScreenshot("settings-ja", app: app)
+        app.buttons["settings-done"].tap()
+        XCTAssertTrue(app.buttons["identify-button"].label.contains("スキャン"))
+        app.terminate()
+        app.launchArguments = ["-idex.soundEnabled", "NO", "-idex.lastViewed", "25"]
+        app.launch()
+        XCTAssertTrue(app.buttons["settings-button"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["identify-button"].label.contains("スキャン"))
+        XCTAssertTrue(app.buttons["camera-button"].label.contains("カメラ"))
+        attachScreenshot("scanner-ja", app: app)
+
+        app.buttons["identify-button"].tap()
+        XCTAssertTrue(element("scan-result", in: app).waitForExistence(timeout: 45))
+        XCTAssertEqual(app.staticTexts["scan-result-name"].label, "ピカチュウ")
+        XCTAssertTrue(app.buttons["identify-button"].label.contains("再スキャン"))
+        if !app.buttons["catalog-button"].exists { app.buttons["record-button"].tap() }
+        XCTAssertEqual(app.staticTexts["pokemon-name"].label, "ピカチュウ")
+        XCTAssertTrue(app.staticTexts["ねずみポケモン"].exists)
+        XCTAssertTrue(app.staticTexts["でんき"].exists)
+        app.buttons["種族値の表示を切り替える"].tap()
+        XCTAssertTrue(app.staticTexts["こうげき"].exists)
+        attachScreenshot("record-stats-ja", app: app)
+
+        openCatalog(in: app, title: "カントー図鑑")
+        let search = app.searchFields.firstMatch
+        if !search.exists {
+            let revealSearch = app.buttons.matching(NSPredicate(format: "label == %@ OR label == %@", "検索", "Search")).firstMatch
+            XCTAssertTrue(revealSearch.waitForExistence(timeout: 5))
+            revealSearch.tap()
+        }
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("ピカチュウ")
+        XCTAssertTrue(app.buttons["pokemon-25"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["pokemon-1"].exists)
+        attachScreenshot("catalog-japanese-search", app: app)
+        replaceSearchText("ほのお", in: search)
+        XCTAssertTrue(app.buttons["pokemon-6"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["pokemon-25"].exists)
+        app.buttons["pokemon-6"].tap()
+        XCTAssertEqual(app.staticTexts["pokemon-name"].label, "リザードン")
+        attachScreenshot("charizard-record-ja", app: app)
     }
 
     func testCatalogSearchAcceptsEnglishChineseAndDexNumber() throws {
@@ -216,14 +266,14 @@ final class iDexUITests: XCTestCase {
         return app
     }
 
-    private func openCatalog(in app: XCUIApplication) {
+    private func openCatalog(in app: XCUIApplication, title: String = "Kanto archive") {
         let catalog = app.buttons["catalog-button"]
         if !catalog.isHittable {
             app.buttons["record-button"].tap()
         }
         XCTAssertTrue(catalog.waitForExistence(timeout: 5))
         catalog.tap()
-        XCTAssertTrue(app.navigationBars["Kanto archive"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
     }
 
     private func replaceSearchText(_ text: String, in field: XCUIElement) {

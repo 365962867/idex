@@ -45,18 +45,18 @@ final class DexStore {
         seenIDs = Set(UserDefaults.standard.array(forKey: "idex.seen") as? [Int] ?? [])
     }
 
-    func text(_ en: String, _ zh: String) -> String { language.text(en, zh) }
+    func text(_ en: String, _ zh: String, _ ja: String) -> String { language.text(en, zh, ja) }
     var sample: Pokemon? { PokemonCatalog.shared.pokemon(id: sampleID) }
     var scannedPokemon: Pokemon? {
         scanResult?.candidates.first.flatMap { PokemonCatalog.shared.pokemon(id: $0.dexID) }
     }
     var scanStatusTitle: String {
-        scanResult?.accepted != nil ? text("IDENTIFIED", "已识别") : text("BEST MATCH", "最可能匹配")
+        scanResult?.accepted != nil ? text("IDENTIFIED", "已识别", "識別完了") : text("BEST MATCH", "最可能匹配", "最有力候補")
     }
     var entryStatusTitle: String {
-        if identified { return text("IDENTIFIED", "已识别") }
-        if confidence != nil { return text("BEST MATCH", "最可能匹配") }
-        return text("ARCHIVE", "档案")
+        if identified { return text("IDENTIFIED", "已识别", "識別完了") }
+        if confidence != nil { return text("BEST MATCH", "最可能匹配", "最有力候補") }
+        return text("ARCHIVE", "档案", "図鑑")
     }
 
     func chooseCamera() {
@@ -118,8 +118,8 @@ final class DexStore {
         } catch {
             guard operation == operationID, isActive else { return }
             message = error is RecognitionError
-                ? text("Recognition is unavailable. Restart iDex and try again.", "识别暂不可用，请重启 iDex 后重试。")
-                : text("Couldn't scan. Try a photo or enable the camera.", "未能扫描，请导入照片或启用相机。")
+                ? text("Recognition is unavailable. Restart iDex and try again.", "识别暂不可用，请重启 iDex 后重试。", "識別を利用できません。iDex を再起動して、もう一度お試しください。")
+                : text("Couldn't scan. Try a photo or enable the camera.", "未能扫描，请导入照片或启用相机。", "スキャンできませんでした。写真を読み込むか、カメラを有効にしてください。")
             audio.play(.error)
         }
     }
@@ -151,7 +151,7 @@ final class DexStore {
             // Cancelled imports must not surface an unreadable-photo error.
         } catch {
             guard operation == operationID, isActive else { return }
-            message = text("This photo couldn't be read. Choose another image.", "无法读取这张照片，请选择其他图片。")
+            message = text("This photo couldn't be read. Choose another image.", "无法读取这张照片，请选择其他图片。", "この写真を読み込めませんでした。別の画像を選んでください。")
             audio.play(.error)
         }
     }
@@ -187,7 +187,7 @@ final class DexStore {
         confidence = match.confidence
         identified = result.accepted != nil
         guard identified else {
-            message = text("Best match; low confidence.", "最可能的匹配，置信度较低。")
+            message = text("Best match; low confidence.", "最可能的匹配，置信度较低。", "最有力候補ですが、確信度が低い結果です。")
             audio.play(.button)
             return
         }

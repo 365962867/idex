@@ -1,16 +1,18 @@
+[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+
 ![iDex — Gotta scan ’em all.](docs/images/banner.png)
 
 # iDex
 
 A pocket Pokédex for iPhone Duo. Point, scan, and pretend Professor Oak gave you a research grant.
 
-Native SwiftUI · English / 简体中文 · On-device Core ML
+Native SwiftUI · English / 简体中文 / 日本語 · On-device Core ML
 
 ## A little field trip
 
-| Scan it | Read about it | 中文也可以 |
-| :---: | :---: | :---: |
-| <img src="docs/screenshots/scanner-result-en.png" width="250" alt="English scanner identifying the bundled Pikachu sample"> | <img src="docs/screenshots/record-en.png" width="250" alt="Pikachu record with types, dimensions and field notes"> | <img src="docs/screenshots/record-zh.png" width="250" alt="Charizard record in Simplified Chinese"> |
+| Scan it | Read in English | 简体中文 | 日本語 |
+| :---: | :---: | :---: | :---: |
+| <img src="docs/screenshots/scanner-result-en.png" width="200" alt="English scanner identifying the bundled Pikachu sample"> | <img src="docs/screenshots/record-en.png" width="200" alt="Pikachu record with types, dimensions and field notes"> | <img src="docs/screenshots/record-zh.png" width="200" alt="Charizard record in Simplified Chinese"> | <img src="docs/screenshots/record-ja.png" width="200" alt="Charizard record in Japanese"> |
 
 Real iPhone Duo simulator captures. Pikachu is the labelled simulator sample, scanned by the bundled model. No wild Pokémon were inconvenienced.
 
@@ -21,8 +23,12 @@ Real iPhone Duo simulator captures. Pikachu is the labelled simulator sample, sc
 - **151 Kanto Pokémon.** Pixel sprites, stats, field notes, and cries.
 - **Scan a photo or use the camera.** Recognition runs on your iPhone; photos stay in memory.
 - **Unfold for more room.** The archive sits beside the scanner on the inner display.
-- **English and 简体中文.** Search by name, number, or type; listen to spoken entries using installed system voices.
+- **English, 简体中文, and 日本語.** All 151 entries include localized names, descriptions, types, and stats. Search by name, number, or type; listen using installed system voices.
 - **A local discovery log.** Your progress survives closing the app. Your research grant remains imaginary.
+
+## Choose your language
+
+Open **Settings → Language** and choose **English**, **简体中文**, or **日本語**. The first launch follows your preferred supported system language, and your selection is saved. Controls, accessibility labels, Pokédex entries, and narration follow the selected language. Names are searchable in all three languages; type search uses the selected language. Narration uses installed iOS voices.
 
 ## Take it for a spin
 

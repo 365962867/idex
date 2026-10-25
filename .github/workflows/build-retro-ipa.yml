@@ -1,0 +1,245 @@
+name: Build iDex Retro Voice IPA
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 35
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Apply retro speech and synced LEDs
+        shell: bash
+        run: |
+          python3 - <<'PY_RETRO'
+          from pathlib import Path
+          
+          # Changes are intentionally limited to the GitHub Actions build workspace.
+          # The GitHub source repository and its working main branch remain untouched.
+          def change(path, old, new):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'Cannot safely patch {path}: expected 1 match, found {count}: {old[:90]!r}')
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print(f'Patched {path}')
+          
+          A='iDex/Services/DeviceAudio.swift'
+          change(A, '    private(set) var isSpeaking = false', '''    private(set) var isSpeaking = false
+              private(set) var speechBlinkOn = false
+              private(set) var speechBeat = 0
+          
+              var useRetroVoice: Bool {
+                  didSet {
+                      defaults.set(useRetroVoice, forKey: "idex.useRetroVoice")
+                      stopSpeaking()
+                  }
+              }''')
+          change(A, '    @ObservationIgnored private var speechTask: Task<Void, Never>?', '''    @ObservationIgnored private var speechTask: Task<Void, Never>?
+              @ObservationIgnored private var speechBlinkTask: Task<Void, Never>?''')
+          change(A, '        isSoundEnabled = defaults.object(forKey: "idex.soundEnabled") != nil\n            ? defaults.bool(forKey: "idex.soundEnabled") : true', '''        isSoundEnabled = defaults.object(forKey: "idex.soundEnabled") != nil
+                      ? defaults.bool(forKey: "idex.soundEnabled") : true
+                  useRetroVoice = defaults.object(forKey: "idex.useRetroVoice") != nil
+                      ? defaults.bool(forKey: "idex.useRetroVoice") : true''')
+          change(A, '''        let request = AudioPlaybackRequest { [weak self] speaking in
+                      Task { @MainActor [weak self] in
+                          guard let self, generation == self.speechGeneration,
+                                self.isActive, self.isSoundEnabled else { return }
+                          self.isSpeaking = speaking
+                      }
+                  }''', '''        let request = AudioPlaybackRequest(
+                      speechActivity: { [weak self] speaking in
+                          Task { @MainActor [weak self] in
+                              guard let self, generation == self.speechGeneration,
+                                    self.isActive, self.isSoundEnabled else { return }
+                              self.isSpeaking = speaking
+                              if speaking { self.beginSpeechBlink() }
+                              else { self.endSpeechBlink() }
+                          }
+                      },
+                      speechProgress: { [weak self] in
+                          Task { @MainActor [weak self] in
+                              guard let self, generation == self.speechGeneration,
+                                    self.isSpeaking, self.isActive, self.isSoundEnabled else { return }
+                              self.speechBeat += 1
+                              self.speechBlinkOn = true
+                          }
+                      }
+                  )''')
+          change(A, '            self.worker.speak(text, languageCode: languageCode, request: request)', '''            let locale = self.useRetroVoice && languageCode.hasPrefix("zh") ? "zh-TW" : languageCode
+                      self.worker.speak(text, languageCode: locale, request: request)''')
+          change(A, '''    func stopSpeaking() {
+                  speechGeneration += 1
+                  isSpeaking = false''', '''    func stopSpeaking() {
+                  speechGeneration += 1
+                  isSpeaking = false
+                  endSpeechBlink()''')
+          change(A, '''    func stopAll() {
+                  stopSound()''', '''    private func beginSpeechBlink() {
+                  speechBlinkTask?.cancel()
+                  speechBlinkOn = true
+                  speechBlinkTask = Task { [weak self] in
+                      while !Task.isCancelled {
+                          do { try await Task.sleep(for: .milliseconds(170)) }
+                          catch { return }
+                          guard let self, self.isSpeaking, self.isActive else { return }
+                          self.speechBlinkOn.toggle()
+                      }
+                  }
+              }
+          
+              private func endSpeechBlink() {
+                  speechBlinkTask?.cancel()
+                  speechBlinkTask = nil
+                  speechBlinkOn = false
+              }
+          
+              func stopAll() {
+                  stopSound()''')
+          
+          B='iDex/Services/AudioPlaybackWorker.swift'
+          change(B, '''    private let speechActivity: (@Sendable (Bool) -> Void)?
+          
+              init(speechActivity: (@Sendable (Bool) -> Void)? = nil) {
+                  self.speechActivity = speechActivity
+              }''', '''    private let speechActivity: (@Sendable (Bool) -> Void)?
+              private let speechProgress: (@Sendable () -> Void)?
+          
+              init(speechActivity: (@Sendable (Bool) -> Void)? = nil,
+                   speechProgress: (@Sendable () -> Void)? = nil) {
+                  self.speechActivity = speechActivity
+                  self.speechProgress = speechProgress
+              }''')
+          change(B, '''    func reportSpeechActivity(_ speaking: Bool) {
+                  guard !isCancelled else { return }
+                  speechActivity?(speaking)
+              }
+          }''', '''    func reportSpeechActivity(_ speaking: Bool) {
+                  guard !isCancelled else { return }
+                  speechActivity?(speaking)
+              }
+          
+              func reportSpeechProgress() {
+                  guard !isCancelled else { return }
+                  speechProgress?()
+              }
+          }''')
+          change(B, '''    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
+                  if ObjectIdentifier(utterance) == utteranceID { request.reportSpeechActivity(true) }
+              }
+          }''', '''    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didContinue utterance: AVSpeechUtterance) {
+                  if ObjectIdentifier(utterance) == utteranceID { request.reportSpeechActivity(true) }
+              }
+          
+              func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer,
+                                     willSpeakRangeOfSpeechString characterRange: NSRange,
+                                     utterance: AVSpeechUtterance) {
+                  if ObjectIdentifier(utterance) == utteranceID { request.reportSpeechProgress() }
+              }
+          }''')
+          change(B, '''            let voice = self.voices[languageCode] ?? AVSpeechSynthesisVoice(language: languageCode)
+                      if let voice { self.voices[languageCode] = voice }
+                      let utterance = AVSpeechUtterance(string: text)
+                      utterance.voice = voice
+                      utterance.rate = languageCode.hasPrefix("zh") ? 0.43 : 0.46
+                      utterance.pitchMultiplier = 0.84
+                      utterance.volume = self.speechVolume
+                      utterance.preUtteranceDelay = 0.28''', '''            let retro = languageCode == "zh-TW"
+                      let voice: AVSpeechSynthesisVoice?
+                      if let cached = self.voices[languageCode] {
+                          voice = cached
+                      } else if retro {
+                          voice = AVSpeechSynthesisVoice.speechVoices().first {
+                              $0.language == "zh-TW" && $0.gender == .male
+                          } ?? AVSpeechSynthesisVoice(language: "zh-TW")
+                            ?? AVSpeechSynthesisVoice(language: "zh-CN")
+                      } else {
+                          voice = AVSpeechSynthesisVoice(language: languageCode)
+                      }
+                      if let voice { self.voices[languageCode] = voice }
+                      let utterance = AVSpeechUtterance(string: text)
+                      utterance.voice = voice
+                      utterance.rate = retro ? 0.47 : (languageCode.hasPrefix("zh") ? 0.43 : 0.46)
+                      utterance.pitchMultiplier = retro ? 0.72 : 0.84
+                      utterance.volume = self.speechVolume
+                      utterance.preUtteranceDelay = retro ? 0.13 : 0.28''')
+          
+          C='iDex/Interface/DeviceStyle.swift'
+          change(C, '''    var isSpeaking: Bool
+              @Environment(\.accessibilityReduceMotion)''', '''    var isSpeaking: Bool
+              var speechBlinkOn: Bool
+              var speechBeat: Int
+              @Environment(\.accessibilityReduceMotion)''')
+          change(C, '''            Lens(isLit: isSpeaking)''', '''            Lens(isLit: isSpeaking && (reduceMotion || speechBlinkOn))''')
+          change(C, '''                                  isLit: isScanning && !isSpeaking && (reduceMotion || index == activeLight))''', '''                                  isLit: (isScanning && !isSpeaking && (reduceMotion || index == activeLight))
+                                                || (isSpeaking && (reduceMotion || speechBlinkOn) && index == speechBeat % 3))''')
+          
+          D='iDex/ContentView.swift'
+          change(D, '            ScannerLights(isScanning: store.isScanning, isSpeaking: store.audio.isSpeaking)', '''            ScannerLights(isScanning: store.isScanning,
+                                    isSpeaking: store.audio.isSpeaking,
+                                    speechBlinkOn: store.audio.speechBlinkOn,
+                                    speechBeat: store.audio.speechBeat)''')
+          
+          E='iDex/Interface/EntryPanel.swift'
+          change(E, '''    @State private var showStats = false''', '''    @State private var showStats = false
+              @Environment(\.accessibilityReduceMotion) private var reduceMotion''')
+          change(E, '''                            Image(systemName: "speaker.wave.2.fill")
+                                      Text(store.text("READ", "朗读", "読み上げ"))''', '''                            Image(systemName: "speaker.wave.2.fill")
+                                      Circle()
+                                          .fill(store.audio.isSpeaking && (reduceMotion || store.audio.speechBlinkOn)
+                                                ? Color.green : Color.green.opacity(0.24))
+                                          .frame(width: 9, height: 9)
+                                          .shadow(color: .green.opacity(store.audio.isSpeaking && (reduceMotion || store.audio.speechBlinkOn) ? 0.9 : 0), radius: 6)
+                                          .accessibilityHidden(true)
+                                      Text(store.text("READ", "朗读", "読み上げ"))''')
+          
+          F='iDex/Interface/LibrarySheets.swift'
+          change(F, '''                    Button(store.text("Stop reading", "停止朗读", "読み上げを停止")) { audio.stopSpeaking() }''', '''                    if store.language == .zhHans {
+                                  Toggle("怀旧台湾国语男声（近似）", isOn: $audio.useRetroVoice)
+                              }
+                              Button(store.text("Stop reading", "停止朗读", "読み上げを停止")) { audio.stopSpeaking() }''')
+          print('Retro voice and synchronized speech LEDs patched successfully.')
+          PY_RETRO
+
+      - name: Check Xcode
+        run: xcodebuild -version
+
+      - name: Compile unsigned iDex
+        run: |
+          xcodebuild \
+            -project iDex.xcodeproj \
+            -scheme iDex \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/iDexRetroBuild" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build
+
+      - name: Package unsigned IPA
+        run: |
+          APP="$RUNNER_TEMP/iDexRetroBuild/Build/Products/Release-iphoneos/iDex.app"
+          test -d "$APP"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$APP" "$RUNNER_TEMP/ipa/Payload/iDex.app"
+          cd "$RUNNER_TEMP/ipa"
+          zip -qry "$GITHUB_WORKSPACE/iDex-Retro-unsigned.ipa" Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: iDex-Retro-unsigned-IPA
+          path: iDex-Retro-unsigned.ipa
+          retention-days: 7
